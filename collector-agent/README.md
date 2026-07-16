@@ -49,3 +49,22 @@ The collector:
 - Use HTTPS and normal certificate validation.
 - Store the collector token in the host secret store or service manager, not in source control.
 - Monitor collector logs for heartbeat or ingestion failures.
+
+## Rotate Collector Credentials
+
+1. Sign in to TriageOps as an authorized administrator or analyst for the intended organization.
+2. Register a new collector and record the returned ID and one-time token in an approved secret store.
+3. Stop the old collector process.
+4. Update only the collector host's local configuration:
+
+   ```text
+   COLLECTOR_ID=<new-collector-id>
+   COLLECTOR_TOKEN=<new-one-time-token>
+   BACKEND_URL=https://<triageops-host>
+   ```
+
+5. Start the collector and verify a successful heartbeat and test event ingestion.
+6. Confirm the resulting event, detection, alert, and incident belong to the expected organization.
+7. Remove or disable the superseded collector registration after the replacement is stable.
+
+Never place the returned token in source control, tickets, screenshots, shell history, or shared documentation.

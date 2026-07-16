@@ -151,6 +151,8 @@ Copilot chat requests accept a client request ID for retry safety. Idempotency i
 
 See `INCIDENT_INTELLIGENCE.md` for the provenance model, API response structure, Copilot boundaries, and a verification workflow.
 
+Analysts participating in a controlled evaluation should also follow `PILOT_CHECKLIST.md` for evidence verification, AI claim reporting, and sensitive-data handling.
+
 ## Observability
 
 Backend logs are structured JSON and include request correlation fields when available:
