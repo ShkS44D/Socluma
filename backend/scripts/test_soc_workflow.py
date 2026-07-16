@@ -1,13 +1,17 @@
 """End-to-end SOC workflow verification script."""
 import requests
 import sys
+import os
 
 BASE = "http://localhost:8001/api/v1"
-EMAIL = "saad@test.com"
-PASSWORD = "Admin@12345"
+EMAIL = os.getenv("E2E_EMAIL")
+PASSWORD = os.getenv("E2E_PASSWORD")
 
 
 def main():
+    if not EMAIL or not PASSWORD:
+        print("E2E_EMAIL and E2E_PASSWORD are required")
+        sys.exit(2)
     # 1. Login
     r = requests.post(f"{BASE}/auth/login", json={"email": EMAIL, "password": PASSWORD}, timeout=30)
     print(f"LOGIN: {r.status_code}")

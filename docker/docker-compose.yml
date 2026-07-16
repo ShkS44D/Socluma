@@ -8,6 +8,8 @@ services:
       - "${BACKEND_PORT:-8001}:8000"
     volumes:
       - ../backend:/app
+    env_file:
+      - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_USER=triageops
@@ -24,6 +26,10 @@ services:
       - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
       - METRICS_ENABLED=true
       - METRICS_PATH=/metrics
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.6-luna}
+      - OPENAI_TIMEOUT_SECONDS=${OPENAI_TIMEOUT_SECONDS:-60}
+      - OPENAI_MAX_OUTPUT_TOKENS=${OPENAI_MAX_OUTPUT_TOKENS:-2000}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-medium}
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +51,8 @@ services:
     command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO --uid=nobody --gid=nogroup
     volumes:
       - ../backend:/app
+    env_file:
+      - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
       - POSTGRES_USER=triageops
@@ -60,6 +68,10 @@ services:
       - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-triageops_dev_collector_secret_change_me}
       - METRICS_ENABLED=true
       - METRICS_PATH=/metrics
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.6-luna}
+      - OPENAI_TIMEOUT_SECONDS=${OPENAI_TIMEOUT_SECONDS:-60}
+      - OPENAI_MAX_OUTPUT_TOKENS=${OPENAI_MAX_OUTPUT_TOKENS:-2000}
+      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-medium}
     depends_on:
       backend:
         condition: service_healthy

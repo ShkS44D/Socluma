@@ -255,9 +255,19 @@ class AIInvestigationTests(unittest.TestCase):
         from src.services import ai_investigation_service as module
 
         calls = []
-        original = module.llm_provider.generate_text
+        from src.services.llm_provider import CopilotStructuredOutput, ProviderResult
+        original = module.llm_provider.generate_copilot
         try:
-            module.llm_provider.generate_text = lambda *args, **kwargs: calls.append("called") or "Grounded answer"
+            module.llm_provider.generate_copilot = lambda *args, **kwargs: (
+                calls.append("called")
+                or ProviderResult(output=CopilotStructuredOutput(
+                    answer="Grounded answer",
+                    evidence_references=[{"type": "incident", "id": self.incident_id}],
+                    confidence=80,
+                    limitations=[],
+                    suggested_follow_up_questions=[],
+                ))
+            )
             headers = {"X-Request-ID": "batch-63-double-click"}
             first = self.client.post(
                 f"/api/v1/ai/incident/{self.incident_id}/chat",
@@ -270,7 +280,7 @@ class AIInvestigationTests(unittest.TestCase):
                 headers=headers,
             )
         finally:
-            module.llm_provider.generate_text = original
+            module.llm_provider.generate_copilot = original
 
         self.assertEqual(first.status_code, 200, first.text)
         self.assertEqual(second.status_code, 200, second.text)
@@ -288,9 +298,18 @@ class AIInvestigationTests(unittest.TestCase):
     def test_chat_request_id_is_bound_to_question_user_and_tenant(self):
         from src.services import ai_investigation_service as module
 
-        original = module.llm_provider.generate_text
+        from src.services.llm_provider import CopilotStructuredOutput, ProviderResult
+        original = module.llm_provider.generate_copilot
         try:
-            module.llm_provider.generate_text = lambda *args, **kwargs: "Scoped answer"
+            module.llm_provider.generate_copilot = lambda *args, **kwargs: ProviderResult(
+                output=CopilotStructuredOutput(
+                    answer="Scoped answer",
+                    evidence_references=[{"type": "incident", "id": self.incident_id}],
+                    confidence=80,
+                    limitations=[],
+                    suggested_follow_up_questions=[],
+                )
+            )
             headers = {"X-Request-ID": "batch-63-scope"}
             self._as_user(self.analyst_id)
             first = self.client.post(
@@ -318,7 +337,7 @@ class AIInvestigationTests(unittest.TestCase):
                 headers=headers,
             )
         finally:
-            module.llm_provider.generate_text = original
+            module.llm_provider.generate_copilot = original
 
         self.assertEqual(first.status_code, 200, first.text)
         self.assertEqual(changed.status_code, 400, changed.text)
@@ -406,15 +425,16 @@ class AIInvestigationTests(unittest.TestCase):
         self._as_user(self.analyst_id)
         from src.services import ai_investigation_service as module
 
-        original = module.llm_provider.generate_text
+        from src.services.llm_provider import ProviderResult
+        original = module.llm_provider.generate_copilot
         try:
-            module.llm_provider.generate_text = lambda prompt, **kwargs: None
+            module.llm_provider.generate_copilot = lambda prompt, **kwargs: ProviderResult(error_category="timeout")
             response = self.client.post(
                 f"/api/v1/ai/incident/{self.incident_id}/chat",
                 json={"message": "Why was this alert triggered?"},
             )
         finally:
-            module.llm_provider.generate_text = original
+            module.llm_provider.generate_copilot = original
 
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
@@ -487,19 +507,74 @@ class AIInvestigationTests(unittest.TestCase):
     def test_chat_uses_llm_text_answer_when_available(self):
         self._as_user(self.analyst_id)
         from src.services import ai_investigation_service as module
+        from src.services.llm_provider import CopilotStructuredOutput, ProviderResult
 
-        original = module.llm_provider.generate_text
+        original = module.llm_provider.generate_copilot
         try:
-            module.llm_provider.generate_text = lambda prompt, **kwargs: "Gemini-style analyst answer with concrete remediation."
+            module.llm_provider.generate_copilot = lambda prompt, **kwargs: ProviderResult(
+                output=CopilotStructuredOutput(
+                    answer="OpenAI analyst answer with concrete remediation.",
+                    evidence_references=[{"type": "incident", "id": self.incident_id}],
+                    confidence=82,
+                    limitations=[],
+                    suggested_follow_up_questions=["What should be validated next?"],
+                ),
+                metadata={
+                    "resolved_model": "gpt-5.6-luna-snapshot",
+                    "response_id": "resp_test",
+                    "request_id": "req_test",
+                    "completion_status": "completed",
+                    "input_tokens": 100,
+                    "output_tokens": 30,
+                    "total_tokens": 130,
+                    "cached_input_tokens": 10,
+                    "reasoning_tokens": 5,
+                },
+            )
             response = self.client.post(
                 f"/api/v1/ai/incident/{self.incident_id}/chat",
                 json={"message": "how to solve it?"},
             )
         finally:
-            module.llm_provider.generate_text = original
+            module.llm_provider.generate_copilot = original
 
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["answer"], "Gemini-style analyst answer with concrete remediation.")
+        body = response.json()
+        self.assertEqual(body["answer"], "OpenAI analyst answer with concrete remediation.")
+        self.assertEqual(body["provider"], "openai")
+        self.assertEqual(body["token_usage"]["cached_input_tokens"], 10)
+
+    def test_chat_rejects_unrelated_provider_evidence_and_falls_back(self):
+        self._as_user(self.analyst_id)
+        from src.services import ai_investigation_service as module
+        from src.services.llm_provider import CopilotStructuredOutput, ProviderResult
+
+        original = module.llm_provider.generate_copilot
+        try:
+            module.llm_provider.generate_copilot = lambda prompt, **kwargs: ProviderResult(
+                output=CopilotStructuredOutput(
+                    answer="This answer cites another tenant.",
+                    evidence_references=[{"type": "incident", "id": self.other_incident_id}],
+                    confidence=99,
+                    limitations=[],
+                    suggested_follow_up_questions=[],
+                ),
+                metadata={"completion_status": "completed"},
+            )
+            response = self.client.post(
+                f"/api/v1/ai/incident/{self.incident_id}/chat",
+                json={"message": "Which facts are confirmed?"},
+            )
+        finally:
+            module.llm_provider.generate_copilot = original
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body["fallback_used"])
+        self.assertEqual(body["provider"], "local_deterministic")
+        self.assertEqual(body["error_category"], "invalid_evidence_references")
+        self.assertNotIn("another tenant", body["answer"])
+        self.assertTrue(all(item["available"] for item in body["evidence_references"]))
 
     def test_rbac_and_tenant_isolation_are_enforced(self):
         self._as_user(self.viewer_id)

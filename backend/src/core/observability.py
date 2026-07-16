@@ -142,6 +142,11 @@ COPILOT_EVIDENCE_REFERENCES = Histogram(
     "triageops_copilot_evidence_references",
     "Evidence references returned per Copilot response.",
 )
+COPILOT_TOKENS = Counter(
+    "triageops_copilot_tokens_total",
+    "OpenAI Copilot tokens by normalized usage category.",
+    ["provider", "type"],
+)
 COPILOT_CONVERSATIONS = Counter(
     "triageops_copilot_conversations_total",
     "Incident Copilot conversations created.",

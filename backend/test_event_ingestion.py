@@ -2,13 +2,14 @@
 import requests
 import json
 import time
+import os
 
 BASE_URL = "http://localhost:8001/api/v1"
 
 # Step 1: Login to get JWT token
 login_payload = {
-    "email": "saad@test.com",
-    "password": "Admin@12345"
+    "email": os.environ["E2E_EMAIL"],
+    "password": os.environ["E2E_PASSWORD"]
 }
 login_response = requests.post(f"{BASE_URL}/auth/login", json=login_payload)
 if login_response.status_code != 200:

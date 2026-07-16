@@ -164,6 +164,20 @@ export interface AIChatResponse {
     selection_applied?: boolean
     max_bytes?: number
   }
+  token_usage?: {
+    input_tokens?: number | null
+    output_tokens?: number | null
+    total_tokens?: number | null
+    cached_input_tokens?: number | null
+    reasoning_tokens?: number | null
+  } | null
+  configured_model?: string | null
+  provider_latency_ms?: number | null
+  resolved_model?: string | null
+  response_id?: string | null
+  provider_request_id?: string | null
+  completion_status?: string | null
+  error_category?: string | null
 }
 
 export interface AIConversationSummary {

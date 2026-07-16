@@ -146,7 +146,7 @@ ALERT_CREATE_EXAMPLES = {
 INCIDENT_ANALYZE_EXAMPLES = {
     "analyze": {
         "summary": "Generate AI Analysis",
-        "description": "Triggers Gemini AI analysis for an existing incident. No request body required.",
+        "description": "Triggers OpenAI-powered analysis for an existing incident. No request body required.",
         "value": {},
     },
 }

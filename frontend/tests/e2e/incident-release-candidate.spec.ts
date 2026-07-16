@@ -188,6 +188,45 @@ test.describe('Incident intelligence release-candidate variants', () => {
     assertNoFailures()
   })
 
+  test('Copilot labels OpenAI and historical Gemini provider metadata safely', async ({ page }) => {
+    const assertNoFailures = monitorRuntime(page)
+    await login(page)
+    await page.route(`**/api/v1/ai/incident/${INCIDENT_ID}/conversations**`, async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+    let provider = 'openai'
+    await page.route(`**/api/v1/ai/incident/${INCIDENT_ID}/chat`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversation_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          answer: 'Grounded provider response.',
+          messages: [],
+          evidence_references: [],
+          confidence: 80,
+          limitations: [],
+          suggested_follow_up_questions: [],
+          model: provider === 'openai' ? 'gpt-5.6-luna' : 'gemini-historical-snapshot',
+          provider,
+          generated_at: '2026-07-16T08:00:00Z',
+          request_id: 'test',
+          fallback_used: false,
+          context_stats: {},
+          token_usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30, cached_input_tokens: 5, reasoning_tokens: 3 },
+        }),
+      })
+      provider = 'gemini'
+    })
+    await page.goto(`/ai/incident-copilot?incidentId=${INCIDENT_ID}`)
+    await page.getByRole('button', { name: 'Ask Copilot' }).click()
+    await expect(page.getByText('OpenAI / gpt-5.6-luna')).toBeVisible()
+    await expect(page.getByText('30 tokens (20 in / 10 out)')).toBeVisible()
+    await page.getByRole('button', { name: 'Ask Copilot' }).click()
+    await expect(page.getByText('Gemini (historical) / gemini-historical-snapshot')).toBeVisible()
+    assertNoFailures()
+  })
+
   test('Copilot conversation history survives a page reload', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     const conversationId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

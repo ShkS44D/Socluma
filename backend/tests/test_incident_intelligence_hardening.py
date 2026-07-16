@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from src.models.sqlalchemy import Alert, EventType, SecurityEvent, Severity
 from src.models.pydantic import IncidentAlertLink
 from src.services.incident_intelligence_service import IncidentIntelligenceService
-from src.services.llm_provider import GeminiProvider
+from src.services.llm_provider import OpenAIProvider
 from src.services.risk_service import RiskService
 
 
@@ -56,12 +56,10 @@ class IncidentIntelligenceHardeningTests(unittest.TestCase):
         self.assertEqual(sum(1 for item in values if item == ("ip_address", "2001:db8::1")), 1)
 
     def test_provider_failure_categories_are_stable_and_safe(self):
-        self.assertEqual(GeminiProvider._classify_error(TimeoutError("request timed out")), "timeout")
-        self.assertEqual(GeminiProvider._classify_error(RuntimeError("429 quota exhausted")), "quota_exhausted")
-        self.assertEqual(GeminiProvider._classify_error(RuntimeError("invalid API key")), "invalid_api_key")
-        self.assertEqual(GeminiProvider._classify_error(ConnectionError("network connection failed")), "network_error")
+        self.assertEqual(OpenAIProvider._classify_error(TimeoutError("request timed out")), "timeout")
+        self.assertEqual(OpenAIProvider._classify_error(ConnectionError("network connection failed")), "connection_error")
         self.assertEqual(
-            GeminiProvider._classify_error(json.JSONDecodeError("bad", "x", 0)),
+            OpenAIProvider._classify_error(json.JSONDecodeError("bad", "x", 0)),
             "malformed_response",
         )
 

@@ -264,7 +264,7 @@ def update_incident_status(
     response_model=AIAnalysisResponse,
     summary="Generate AI incident analysis",
     description=(
-        "Run Gemini AI analysis on an incident. Returns summary, why suspicious, "
+        "Run OpenAI-powered analysis on an incident. Returns summary, why suspicious, "
         "MITRE ATT&CK mapping, recommended actions, and threat intel results. "
         "Results are persisted to the incident record."
     ),

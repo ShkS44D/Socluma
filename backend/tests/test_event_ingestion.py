@@ -6,15 +6,15 @@ import sys
 import os
 import pytest
 
-if os.getenv("RUN_LIVE_EVENT_INGESTION_TEST") != "1":
-    pytest.skip("Live localhost ingestion smoke test is opt-in", allow_module_level=True)
+if os.getenv("RUN_LIVE_EVENT_INGESTION_TEST") != "1" or not os.getenv("E2E_EMAIL") or not os.getenv("E2E_PASSWORD"):
+    pytest.skip("Live localhost ingestion smoke test requires opt-in runtime credentials", allow_module_level=True)
 
 BASE_URL = "http://localhost:8001/api/v1"
 
 # Step 1: Login to get JWT token
 login_payload = {
-    "email": "saad@test.com",
-    "password": "Admin@12345"
+    "email": os.environ["E2E_EMAIL"],
+    "password": os.environ["E2E_PASSWORD"]
 }
 print("Logging in...")
 login_response = requests.post(f"{BASE_URL}/auth/login", json=login_payload)

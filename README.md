@@ -114,7 +114,7 @@ Connector credentials are encrypted at rest and returned only as metadata/finger
 
 The AI Investigation Copilot helps analysts reason over tenant-scoped investigation evidence. It is not a general-purpose chatbot: every response is grounded in an authorized incident and its linked alerts, source events, detection rules, entities, IOCs, timeline entries, analyst notes, risk factors, and audit history.
 
-Each incident exposes a deterministic explanation at `GET /api/v1/incidents/{incident_id}/explanation`. The response identifies the primary alert, subsequent correlated alerts, source events, matching rules, correlation reasons, observed time window, affected entities, MITRE mappings, risk breakdown, evidence references, limitations, and recommended investigation questions. This explanation works without Gemini and is the source of truth for the incident detail panel.
+Each incident exposes a deterministic explanation at `GET /api/v1/incidents/{incident_id}/explanation`. The response identifies the primary alert, subsequent correlated alerts, source events, matching rules, correlation reasons, observed time window, affected entities, MITRE mappings, risk breakdown, evidence references, limitations, and recommended investigation questions. This explanation works without OpenAI and is the source of truth for the incident detail panel.
 
 Provenance is labelled as recorded, manual, or legacy-derived. Historical incidents are never presented as having correlation facts that were not stored at creation time. Official risk scores remain deterministic and their components, including any 0-100 bounding adjustment, reconcile to the displayed total.
 
@@ -145,7 +145,7 @@ AI API endpoints:
 
 All AI endpoints require authentication, enforce RBAC, resolve tenant scope from the authenticated session, and create audit events. Conversation history is scoped to the tenant, incident, and current user. Prompt construction redacts sensitive fields and inline credential assignments such as passwords, API keys, tokens, refresh tokens, JWTs, connector credentials, and private keys. Prompt size is bounded, known prompt-injection phrases in evidence are filtered, and Copilot chat has a per-conversation rate limit. Context selection deterministically prioritizes incident origin, the primary alert, correlation and risk factors, high-value evidence, entities, IOCs, timeline boundaries, notes, MITRE mappings, and recent conversation turns. Safe response metadata reports inclusion, omission, and context-size totals without exposing prompts.
 
-Generated artifacts and conversation messages are stored in the database for auditability and later review. If `GEMINI_API_KEY` is unavailable, the service returns deterministic evidence-based fallback analysis so workflows remain usable in local development and tests.
+Generated artifacts and conversation messages are stored in the database for auditability and later review. If `OPENAI_API_KEY` is unavailable, the service returns deterministic evidence-based fallback analysis so workflows remain usable in local development and tests. Copilot calls use the OpenAI Responses API with Structured Outputs, `store=false`, and no tools.
 
 Copilot chat requests accept a client request ID for retry safety. Idempotency is scoped to the authenticated tenant, user, incident, conversation, and normalized question. A request already in progress returns a conflict response; an authorized retry after completion replays the stored result without another provider call or duplicate conversation messages. Redis provides the distributed in-flight lock when available, with a bounded process-local lock for degraded local operation. A request ID cannot be reused for a different question, user, tenant, or incident.
 
@@ -198,7 +198,7 @@ Common backend variables:
 - `METRICS_ENABLED`, `METRICS_PATH`.
 - `WEBSOCKET_HEARTBEAT_SECONDS`.
 - `SOAR_TASK_ALWAYS_EAGER`: execute SOAR Celery tasks inline for local/test workflows.
-- `GEMINI_API_KEY`, `GEMINI_MODEL`.
+- `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_OUTPUT_TOKENS`, `OPENAI_REASONING_EFFORT`.
 - `AI_CONTEXT_MAX_BYTES`: maximum serialized Copilot evidence context (default `65536`).
 - `AI_CONTEXT_ALERT_LIMIT`, `AI_CONTEXT_EVENT_LIMIT`, `AI_CONTEXT_ENTITY_LIMIT`, `AI_CONTEXT_IOC_LIMIT`, `AI_CONTEXT_EVIDENCE_LIMIT`.
 - `AI_CONTEXT_NOTE_LIMIT`, `AI_CONTEXT_AUDIT_LIMIT`, `AI_CONVERSATION_HISTORY_LIMIT`.

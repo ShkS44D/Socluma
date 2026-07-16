@@ -178,6 +178,14 @@ class AIChatResponse(BaseModel):
     request_id: Optional[str] = None
     fallback_used: bool = False
     context_stats: Dict[str, Any] = Field(default_factory=dict)
+    token_usage: Optional[Dict[str, Optional[int]]] = None
+    configured_model: Optional[str] = None
+    provider_latency_ms: Optional[float] = None
+    resolved_model: Optional[str] = None
+    response_id: Optional[str] = None
+    provider_request_id: Optional[str] = None
+    completion_status: Optional[str] = None
+    error_category: Optional[str] = None
 
 
 class AIConversationSummaryResponse(BaseModel):
