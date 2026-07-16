@@ -1,0 +1,12 @@
+{
+  "source": "ids",
+  "event_type": "suspicious_network",
+  "source_ip": "10.0.0.5",
+  "source_port": 54321,
+  "destination_ip": "198.51.100.25",
+  "destination_port": 443,
+  "protocol": "HTTPS",
+  "timestamp": "2026-06-25T10:30:00",
+  "severity": "medium",
+  "message": "Connection to known malicious IP address"
+}

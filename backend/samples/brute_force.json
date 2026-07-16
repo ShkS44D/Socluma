@@ -1,0 +1,11 @@
+{
+  "source": "firewall",
+  "event_type": "brute_force",
+  "user": "admin",
+  "ip": "192.168.1.10",
+  "timestamp": "2026-06-25T10:00:00",
+  "severity": "high",
+  "message": "Multiple failed login attempts detected",
+  "attempts": 15,
+  "time_window": "5 minutes"
+}

@@ -1,0 +1,15 @@
+{
+  "source": "auth_server",
+  "event_type": "account_takeover",
+  "user": "john.doe",
+  "ip": "203.0.113.45",
+  "location": "Russia",
+  "normal_ip": "192.168.1.50",
+  "normal_location": "United States",
+  "timestamp": "2026-06-25T11:00:00",
+  "severity": "critical",
+  "message": "Unusual login from a new geographic location detected",
+  "failed_attempts_before_success": 3,
+  "password_changed": true,
+  "email_verified": false
+}

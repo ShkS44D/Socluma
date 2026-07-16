@@ -1,0 +1,139 @@
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.prod
+    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:?POSTGRES_DB is required}
+      - USE_SQLITE=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - USE_REDIS_MOCK=false
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET is required}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:?COLLECTOR_TOKEN_SECRET is required}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:?ALLOWED_HOSTS is required}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:?BACKEND_CORS_ORIGINS is required}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PATH=${METRICS_PATH:-/metrics}
+      - RATE_LIMIT_DEFAULT=${RATE_LIMIT_DEFAULT:-200/minute}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.prod
+    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
+    environment:
+      - ENVIRONMENT=production
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:?POSTGRES_DB is required}
+      - USE_SQLITE=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - USE_REDIS_MOCK=false
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET is required}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:?COLLECTOR_TOKEN_SECRET is required}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:?ALLOWED_HOSTS is required}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:?BACKEND_CORS_ORIGINS is required}
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PATH=${METRICS_PATH:-/metrics}
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A src.workers.celery_app.celery_app inspect ping -d celery@$$HOSTNAME | grep -q OK"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: ""
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  nginx:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    ports:
+      - "${PUBLIC_PORT:-8080}:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:?POSTGRES_DB is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

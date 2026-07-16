@@ -1,0 +1,139 @@
+services:
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    volumes:
+      - ../backend:/app
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=triageops
+      - POSTGRES_PASSWORD=triageops_secret
+      - POSTGRES_DB=triageops
+      - USE_SQLITE=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - USE_REDIS_MOCK=false
+      - SECRET_KEY=${SECRET_KEY:-triageops_dev_secret_change_me}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-triageops_dev_jwt_secret_change_me}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-triageops_dev_refresh_secret_change_me}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-triageops_dev_collector_secret_change_me}
+      - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
+      - METRICS_ENABLED=true
+      - METRICS_PATH=/metrics
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # Background Worker
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO --uid=nobody --gid=nogroup
+    volumes:
+      - ../backend:/app
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=triageops
+      - POSTGRES_PASSWORD=triageops_secret
+      - POSTGRES_DB=triageops
+      - USE_SQLITE=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - USE_REDIS_MOCK=false
+      - SECRET_KEY=${SECRET_KEY:-triageops_dev_secret_change_me}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-triageops_dev_jwt_secret_change_me}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-triageops_dev_refresh_secret_change_me}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-triageops_dev_collector_secret_change_me}
+      - METRICS_ENABLED=true
+      - METRICS_PATH=/metrics
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://127.0.0.1:8001}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=triageops
+      - POSTGRES_PASSWORD=triageops_secret
+      - POSTGRES_DB=triageops
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triageops -d triageops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT_PUBLISHED:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # pgAdmin (optional, for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@triageops.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

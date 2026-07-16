@@ -1,0 +1,92 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.env
+.env.*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+dist-ssr/
+*.local
+coverage/
+playwright-report/
+test-results/
+.vite/
+
+# Runtime data and logs
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+*.log.*
+logs/
+
+# Secrets, certificates, and local credentials
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+credentials*.json
+service-account*.json
+
+# Local backups and generated validation output
+*.zip
+*.tar
+*.tar.gz
+backups/
+backend/validation/
+backend/validation-*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic migrations (except __init__.py)
+alembic/versions/*.pyc
