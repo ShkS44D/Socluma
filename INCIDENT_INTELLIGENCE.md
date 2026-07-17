@@ -67,12 +67,13 @@ Every answer returns an answer, evidence references, confidence, limitations, su
 
 Conversation records belong to one tenant, incident, and user. Other users cannot retrieve that history through the conversation APIs. Prompts are size-bounded. Event payloads, alert text, IOC values, analyst questions, conversation history, and notes are structurally separated as untrusted content from provider system instructions. Sensitive dictionary fields and inline credential assignments are redacted, and common instruction-override phrases are neutralized before provider submission.
 
-If Gemini is unavailable, invalid, timed out, or over quota, TriageOps returns deterministic analysis from the same authorized evidence. The response identifies the local fallback provider and retains citations and limitations.
+If OpenAI is unavailable, invalid, timed out, rate limited, or over quota, TriageOps returns deterministic analysis from the same authorized evidence. The response identifies the local fallback provider and retains citations and limitations.
 
 ## Environment
 
-- `GEMINI_API_KEY`: optional in development; required only when Gemini-backed answers are desired.
-- `GEMINI_MODEL`: official Google GenAI model name. The configured default is `gemini-2.0-flash`.
+- `OPENAI_API_KEY`: optional in development and required by production runtime validation.
+- `OPENAI_MODEL`: OpenAI model name; configured as `gpt-5.6-luna`.
+- `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_OUTPUT_TOKENS`, and `OPENAI_REASONING_EFFORT`: bounded request controls.
 
 No additional environment variables are required for incident provenance or deterministic fallback analysis.
 
@@ -85,6 +86,6 @@ No additional environment variables are required for incident provenance or dete
 5. Select **Open Copilot** and ask: `Why was this incident created?`
 6. Open the cited alert or event below the answer.
 7. Ask: `Which evidence supports the severity?` and `What should I investigate next?`
-8. Temporarily omit `GEMINI_API_KEY` in a development environment to demonstrate that deterministic fallback analysis remains available.
+8. Temporarily omit `OPENAI_API_KEY` in a development environment to demonstrate that deterministic fallback analysis remains available.
 
 The Copilot enhances the deterministic explanation; it does not replace or alter the underlying incident evidence.

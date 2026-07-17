@@ -59,6 +59,7 @@ from src.models.sqlalchemy import (
 from src.services.ai_investigation_service import IncidentCopilotTools
 from src.services.ai_investigation_service import ai_investigation_service
 from src.services import ai_investigation_service as ai_module
+from src.services.llm_provider import ProviderResult
 
 
 def percentile(values: list[float], percentage: float) -> float:
@@ -384,7 +385,7 @@ def verify_copilot_idempotency(
     request_id = f"batch63-idempotency-{'redis' if redis_available else 'local'}-{uuid.uuid4().hex}"
     question = "What evidence supports this incident?"
     headers = {**primary["headers"], "X-Request-ID": request_id}
-    original_provider = ai_module.llm_provider.generate_text
+    original_provider = ai_module.llm_provider.generate_copilot
     original_redis_from_url = ai_module.redis.from_url
     provider_attempts = 0
     provider_guard = threading.Lock()
@@ -394,14 +395,14 @@ def verify_copilot_idempotency(
         with provider_guard:
             provider_attempts += 1
         time.sleep(0.2)
-        return None
+        return ProviderResult(error_category="timeout")
 
     if not redis_available:
         def unavailable_redis(*_args, **_kwargs):
             raise ai_module.redis.exceptions.ConnectionError("Controlled Redis outage")
 
         ai_module.redis.from_url = unavailable_redis
-    ai_module.llm_provider.generate_text = controlled_fallback
+    ai_module.llm_provider.generate_copilot = controlled_fallback
     try:
         with ThreadPoolExecutor(max_workers=callers) as executor:
             futures = [
@@ -470,13 +471,13 @@ def verify_copilot_idempotency(
         def interrupted_provider(*_args, **_kwargs):
             raise TimeoutError("Controlled provider interruption")
 
-        ai_module.llm_provider.generate_text = interrupted_provider
+        ai_module.llm_provider.generate_copilot = interrupted_provider
         interrupted = client.post(
             f"/api/v1/ai/incident/{primary['incident_id']}/chat",
             headers=failed_headers,
             json={"message": question},
         )
-        ai_module.llm_provider.generate_text = controlled_fallback
+        ai_module.llm_provider.generate_copilot = controlled_fallback
         retry_after_interruption = client.post(
             f"/api/v1/ai/incident/{primary['incident_id']}/chat",
             headers=failed_headers,
@@ -515,7 +516,7 @@ def verify_copilot_idempotency(
             "local_locks_remaining": len(ai_investigation_service._local_request_locks),
         }
     finally:
-        ai_module.llm_provider.generate_text = original_provider
+        ai_module.llm_provider.generate_copilot = original_provider
         ai_module.redis.from_url = original_redis_from_url
 
 

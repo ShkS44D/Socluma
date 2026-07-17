@@ -25,7 +25,7 @@ flowchart LR
     Worker --> DB
     Worker --> Integrations["External Connectors"]
     API --> AI["AI Investigation Service"]
-    AI --> Gemini["Gemini API"]
+    AI --> OpenAI["OpenAI Responses API"]
     API --> WS["WebSocket Manager"]
     WS --> Frontend
 ```
@@ -197,7 +197,7 @@ sequenceDiagram
     participant API as AI API
     participant Service as AIInvestigationService
     participant DB as Tenant Database
-    participant LLM as Gemini Provider
+    participant LLM as OpenAI Provider
     participant Audit
 
     Analyst->>Frontend: Request incident summary or Copilot answer
@@ -214,11 +214,11 @@ sequenceDiagram
     API-->>Frontend: Return structured AI response
 ```
 
-Gemini receives a bounded structured prompt, not an unrestricted database dump. `IncidentCopilotTools` applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. The Copilot cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When Gemini is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
+OpenAI receives a bounded structured prompt, not an unrestricted database dump. `IncidentCopilotTools` applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. The Copilot cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When OpenAI is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
 
 Evidence-reference navigation is backend-authoritative. The frontend resolves each reference through the tenant-scoped incident evidence API before navigating. Deleted or unsupported evidence returns a safe not-found response, and a reference from another tenant cannot be resolved even when its identifier is known.
 
-Provider availability is explicit in the response metadata. A deterministic response is marked as fallback and retains real evidence references; it is not represented as a live Gemini answer. Provider quota or availability failures are categorized and are not retried without a new authorized request.
+Provider availability is explicit in the response metadata. A deterministic response is marked as fallback and retains real evidence references; it is not represented as a live OpenAI answer. Provider quota or availability failures are categorized and are not retried without a new authorized request.
 
 Incident Detail loads core incident data independently. Explanation, timeline, and IOC collections have separate loading and error states; timeline and IOC requests are lazy and cancelled when the page unmounts. Related alerts are paginated and compact by default, while complete event payloads remain available through event-detail APIs.
 

@@ -794,7 +794,7 @@ class IncidentService:
             "created_at": utc_isoformat(incident.created_at)
         })
 
-        # Auto-run Gemini AI analysis on new incidents
+        # Auto-run configured AI analysis on new incidents
         try:
             self._run_ai_analysis(db, tenant_id, incident)
         except Exception:

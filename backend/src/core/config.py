@@ -63,9 +63,11 @@ class Settings(BaseSettings):
     CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = 240
     
     # AI
-    GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.0-flash"
-    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-5.6-luna"
+    OPENAI_TIMEOUT_SECONDS: int = 60
+    OPENAI_MAX_OUTPUT_TOKENS: int = 2000
+    OPENAI_REASONING_EFFORT: str = "medium"
     AI_CONTEXT_MAX_BYTES: int = 65_536
     AI_CONTEXT_MAX_ALERTS: int = 20
     AI_CONTEXT_MAX_EVENTS: int = 30
@@ -150,8 +152,14 @@ class Settings(BaseSettings):
             raise RuntimeError("CELERY_TASK_TIME_LIMIT_SECONDS must be greater than or equal to CELERY_TASK_SOFT_TIME_LIMIT_SECONDS")
         if self.THREAT_INTEL_CACHE_TTL_HOURS < 1:
             raise RuntimeError("THREAT_INTEL_CACHE_TTL_HOURS must be at least 1")
-        if not self.GEMINI_MODEL.strip():
-            raise RuntimeError("GEMINI_MODEL must not be empty")
+        if not self.OPENAI_MODEL.strip():
+            raise RuntimeError("OPENAI_MODEL must not be empty")
+        if self.OPENAI_TIMEOUT_SECONDS < 1 or self.OPENAI_TIMEOUT_SECONDS > 300:
+            raise RuntimeError("OPENAI_TIMEOUT_SECONDS must be between 1 and 300")
+        if self.OPENAI_MAX_OUTPUT_TOKENS < 1 or self.OPENAI_MAX_OUTPUT_TOKENS > 100_000:
+            raise RuntimeError("OPENAI_MAX_OUTPUT_TOKENS must be between 1 and 100000")
+        if self.OPENAI_REASONING_EFFORT not in {"minimal", "low", "medium", "high"}:
+            raise RuntimeError("OPENAI_REASONING_EFFORT must be one of minimal, low, medium, or high")
         bounded_ai_settings = {
             "AI_CONTEXT_MAX_BYTES": (self.AI_CONTEXT_MAX_BYTES, 8_192, 262_144),
             "AI_CONTEXT_MAX_ALERTS": (self.AI_CONTEXT_MAX_ALERTS, 1, 100),
@@ -201,6 +209,8 @@ class Settings(BaseSettings):
             raise RuntimeError("Production startup blocked: USE_SQLITE must be false")
         if self.USE_REDIS_MOCK:
             raise RuntimeError("Production startup blocked: USE_REDIS_MOCK must be false")
+        if not self.OPENAI_API_KEY:
+            raise RuntimeError("Production startup blocked: OPENAI_API_KEY must be configured")
 
 
 @lru_cache()

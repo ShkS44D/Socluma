@@ -1,13 +1,14 @@
 import requests
 import json
+import os
 
 BASE_URL = "http://localhost:8001"
 
 # First login to get a token
 login_url = f"{BASE_URL}/api/v1/auth/login"
 login_data = {
-    "email": "saad@test.com",
-    "password": "Admin@12345"
+    "email": os.environ["E2E_EMAIL"],
+    "password": os.environ["E2E_PASSWORD"]
 }
 
 login_response = requests.post(login_url, json=login_data)

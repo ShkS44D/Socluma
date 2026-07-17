@@ -64,7 +64,7 @@ const AIAnalysisPanel: React.FC<AIAnalysisPanelProps> = ({
           )}
         </Box>
         <Typography variant="body2" sx={{ mb: 2 }}>
-          {summary || 'No AI summary available yet. Click "Generate AI Analysis" to run Gemini-powered incident analysis.'}
+          {summary || 'No AI summary available yet. Click "Generate AI Analysis" to run OpenAI-powered incident analysis.'}
         </Typography>
 
         <Typography variant="subtitle2" gutterBottom>

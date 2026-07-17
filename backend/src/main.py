@@ -553,9 +553,17 @@ def _check_worker() -> HealthComponent:
 
 def _check_ai_provider() -> HealthComponent:
     started = time.perf_counter()
-    if not settings.GEMINI_API_KEY:
-        return _component("degraded", started, "GEMINI_API_KEY is not configured; fallback analysis is active")
-    return _component("ok", started, f"Configured model: {settings.GEMINI_MODEL}")
+    if not settings.OPENAI_API_KEY:
+        return _component(
+            "degraded",
+            started,
+            f"Provider: openai; configured: false; model: {settings.OPENAI_MODEL}; deterministic fallback: available",
+        )
+    return _component(
+        "ok",
+        started,
+        f"Provider: openai; configured: true; model: {settings.OPENAI_MODEL}; deterministic fallback: available; quota not checked",
+    )
 
 
 def _check_threat_intel_provider() -> HealthComponent:

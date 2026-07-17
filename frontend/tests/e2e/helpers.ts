@@ -2,15 +2,22 @@ import { expect, Page, test } from '@playwright/test'
 
 const email = process.env.E2E_EMAIL
 const password = process.env.E2E_PASSWORD
-let cachedAuth: { accessToken: string; refreshToken: string | null } | null = null
+const apiBaseURL = process.env.E2E_API_BASE_URL || 'http://localhost:8001'
+let cachedAuth: { accessToken: string; refreshToken: string } | null = null
 
 export const login = async (page: Page): Promise<void> => {
   test.skip(!email || !password, 'E2E_EMAIL and E2E_PASSWORD are required')
   if (cachedAuth) {
+    const response = await page.request.post(`${apiBaseURL}/api/v1/auth/refresh`, {
+      data: { refresh_token: cachedAuth.refreshToken },
+    })
+    expect(response.ok()).toBeTruthy()
+    const tokenPair = await response.json() as { access_token: string; refresh_token: string }
+    cachedAuth = { accessToken: tokenPair.access_token, refreshToken: tokenPair.refresh_token }
     await page.goto('/login')
     await page.evaluate(({ accessToken, refreshToken }) => {
       localStorage.setItem('triageops.auth.accessToken', accessToken)
-      if (refreshToken) localStorage.setItem('triageops.auth.refreshToken', refreshToken)
+      localStorage.setItem('triageops.auth.refreshToken', refreshToken)
     }, cachedAuth)
     await page.goto('/dashboard')
     await expect(page).toHaveURL(/\/dashboard$/)
@@ -23,7 +30,7 @@ export const login = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/dashboard$/)
   cachedAuth = await page.evaluate(() => ({
     accessToken: localStorage.getItem('triageops.auth.accessToken') || '',
-    refreshToken: localStorage.getItem('triageops.auth.refreshToken'),
+    refreshToken: localStorage.getItem('triageops.auth.refreshToken') || '',
   }))
 }
 

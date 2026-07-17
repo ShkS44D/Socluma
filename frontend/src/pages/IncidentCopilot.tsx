@@ -23,6 +23,13 @@ const promptSuggestions = [
   'Generate an executive report',
 ]
 
+const providerLabel = (provider: string): string => {
+  if (provider === 'openai') return 'OpenAI'
+  if (provider === 'local_deterministic') return 'Deterministic fallback'
+  if (provider.toLowerCase().includes('gemini')) return 'Gemini (historical)'
+  return provider
+}
+
 const IncidentCopilot: React.FC = () => {
   const [searchParams] = useSearchParams()
   const [incidentId, setIncidentId] = useState(() => searchParams.get('incidentId') || '')
@@ -91,7 +98,7 @@ const IncidentCopilot: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 1100, mx: 'auto' }}>
-      <PageHeader title="Incident Copilot" description="Ask questions using only tenant-scoped incident evidence" />
+      <PageHeader title="Incident Copilot" description="OpenAI-powered answers grounded only in tenant-scoped incident evidence" />
       {error && <ErrorState message={error} onRetry={() => setError(null)} />}
       <Card sx={{ mt: 3 }}>
         <CardContent>
@@ -125,8 +132,15 @@ const IncidentCopilot: React.FC = () => {
             <Typography sx={{ whiteSpace: 'pre-wrap', mt: 1 }}>{chat.answer}</Typography>
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
               <Chip size="small" label={`${chat.confidence}% confidence`} color="info" variant="outlined" />
-              <Chip size="small" label={`${chat.provider} / ${chat.model}`} variant="outlined" />
+              <Chip size="small" label={`${providerLabel(chat.provider)} / ${chat.model}`} variant="outlined" />
               {chat.fallback_used && <Chip size="small" label="Deterministic fallback" color="warning" variant="outlined" />}
+              {chat.token_usage?.total_tokens != null && (
+                <Chip
+                  size="small"
+                  label={`${chat.token_usage.total_tokens} tokens (${chat.token_usage.input_tokens ?? 0} in / ${chat.token_usage.output_tokens ?? 0} out)`}
+                  variant="outlined"
+                />
+              )}
             </Stack>
             <Divider sx={{ my: 3 }} />
             <Typography variant="subtitle1">Evidence references</Typography>
