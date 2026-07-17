@@ -607,6 +607,23 @@ class IncidentAlertLink(BaseModel):
         return value or []
 
 
+class IncidentMitreMappingResponse(BaseModel):
+    tactic: str
+    technique_id: str
+    technique_name: str
+    sub_technique_id: Optional[str] = None
+    sub_technique_name: Optional[str] = None
+    confidence: float
+    confidence_reasons: List[str] = Field(default_factory=list)
+    supporting_evidence: List[Dict[str, Any]] = Field(default_factory=list)
+    source_alert_ids: List[str] = Field(default_factory=list)
+    stage_order: int
+    first_seen_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class Incident(IncidentBase):
     id: str
     tenant_id: str
@@ -643,6 +660,7 @@ class IncidentDetail(IncidentBase):
     resolved_at: Optional[datetime] = None
     related_alerts: List[IncidentAlertLink]
     correlation_reasons: List[str]
+    mitre_mappings: List[IncidentMitreMappingResponse] = Field(default_factory=list)
     related_alert_total: int = 0
     related_alert_page: int = 1
     related_alert_page_size: int = 20

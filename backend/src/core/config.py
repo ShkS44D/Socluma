@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     AI_CONTEXT_MAX_AUDIT_EVENTS: int = 30
     AI_CONVERSATION_HISTORY_LIMIT: int = 12
     AI_REQUEST_IDEMPOTENCY_TTL_SECONDS: int = 86_400
+    CORRELATION_WINDOW_MINUTES: int = 15
+    CORRELATION_MIN_SCORE: float = 45.0
+    CORRELATION_MIN_ALERTS: int = 2
 
     # Threat intelligence
     VIRUSTOTAL_API_KEY: Optional[str] = None

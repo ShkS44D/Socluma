@@ -21,6 +21,7 @@ const AlertQueue = lazy(() => import('./pages/AlertQueue'))
 const AlertDetail = lazy(() => import('./pages/AlertDetail'))
 const Incidents = lazy(() => import('./pages/Incidents'))
 const IncidentDetail = lazy(() => import('./pages/IncidentDetail'))
+const MitreMatrix = lazy(() => import('./pages/MitreMatrix'))
 const ThreatIntel = lazy(() => import('./pages/ThreatIntel'))
 const IOCDetail = lazy(() => import('./pages/IOCDetail'))
 const DetectionRules = lazy(() => import('./pages/DetectionRules'))
@@ -118,6 +119,7 @@ function App() {
               <Route path="alerts/:alertId" element={<AlertDetail />} />
               <Route path="incidents" element={<Incidents />} />
               <Route path="incidents/:incidentId" element={<IncidentDetail />} />
+              <Route path="mitre-matrix" element={<MitreMatrix />} />
               <Route path="threat-intel" element={<ThreatIntel />} />
               <Route path="threat-intel/:iocId" element={<IOCDetail />} />
               <Route path="detection-rules" element={<DetectionRules />} />

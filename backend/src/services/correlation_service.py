@@ -8,6 +8,7 @@ import json
 
 from sqlalchemy.orm import Session, joinedload
 
+from src.core.config import get_settings
 from src.models.sqlalchemy import Alert, AlertStatus, Incident, IncidentStatus, MitreTechnique
 
 
@@ -19,11 +20,18 @@ class CorrelationCandidate:
     correlation_reasons: list[str]
     is_duplicate: bool = False
     duplicate_of: Optional[str] = None
+    qualified: bool = False
+    matched_identifiers: list[str] | None = None
 
 
 class CorrelationService:
-    DEFAULT_WINDOW_MINUTES = 15
     DUPLICATE_WINDOW_MINUTES = 60
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        self.window_minutes = settings.CORRELATION_WINDOW_MINUTES
+        self.minimum_score = settings.CORRELATION_MIN_SCORE
+        self.minimum_alerts = settings.CORRELATION_MIN_ALERTS
 
     def correlate_alert(self, db: Session, alert: Alert) -> CorrelationCandidate:
         # Check for duplicates first
@@ -31,14 +39,12 @@ class CorrelationService:
         if duplicate_check:
             return duplicate_check
 
-        window_start = self._to_utc(alert.created_at) - timedelta(minutes=self.DEFAULT_WINDOW_MINUTES)
-
+        observed_at = self._observed_at(alert)
         recent_alerts = (
             db.query(Alert)
             .filter(
                 Alert.tenant_id == alert.tenant_id,
                 Alert.id != alert.id,
-                Alert.created_at >= window_start,
                 Alert.status != AlertStatus.DISMISSED,
             )
             .options(joinedload(Alert.incident))
@@ -50,8 +56,10 @@ class CorrelationService:
         best_candidate: Optional[CorrelationCandidate] = None
 
         for candidate_alert in recent_alerts:
+            if abs(self._observed_at(candidate_alert) - observed_at) > timedelta(minutes=self.window_minutes):
+                continue
             score, reasons = self._pair_score(db, alert, candidate_alert)
-            if score <= 0:
+            if score < self.minimum_score:
                 continue
 
             candidate_incident = candidate_alert.incident
@@ -72,6 +80,8 @@ class CorrelationService:
                     alerts=grouped_alerts,
                     correlation_score=score,
                     correlation_reasons=reasons,
+                    qualified=True,
+                    matched_identifiers=self._matched_identifier_names(alert, candidate_alert),
                 )
 
         if best_candidate is None:
@@ -81,6 +91,8 @@ class CorrelationService:
                 alerts=[alert],
                 correlation_score=0,
                 correlation_reasons=[default_reason],
+                qualified=False,
+                matched_identifiers=[],
             )
 
         best_candidate.alerts = sorted(
@@ -116,6 +128,8 @@ class CorrelationService:
                     correlation_reasons=["Duplicate alert detected - same event fingerprint"],
                     is_duplicate=True,
                     duplicate_of=candidate.id,
+                    qualified=bool(candidate_incident),
+                    matched_identifiers=["duplicate_fingerprint"],
                 )
         return None
 
@@ -137,6 +151,8 @@ class CorrelationService:
             "user": indicators["user"],
             "ip": indicators["ip"],
             "hostname": indicators["hostname"],
+            "mitre_techniques": sorted(self._extract_mitre_techniques(alert)),
+            "observed_at": self._observed_at(alert).isoformat(),
         }
         
         # Remove None values
@@ -146,27 +162,35 @@ class CorrelationService:
         return hashlib.sha256(fingerprint_json.encode()).hexdigest()
 
     def _pair_score(self, db: Session, alert: Alert, candidate: Alert) -> tuple[float, list[str]]:
-        current = self._indicators(alert)
-        existing = self._indicators(candidate)
+        current = self._identifiers(alert)
+        existing = self._identifiers(candidate)
         reasons: list[str] = []
         score = 0.0
 
-        if current["user"] and current["user"] == existing["user"]:
-            score += 30
-            reasons.append("Grouped because same user was detected within 15 minutes")
+        weights = {
+            "hostname": 25, "agent_id": 25, "source_ip": 20, "destination_ip": 20,
+            "source_host": 18, "destination_host": 18, "source_user": 18, "destination_user": 18,
+            "source_port": 5, "destination_port": 5, "rule_id": 20,
+        }
+        for name, weight in weights.items():
+            if current.get(name) is not None and current.get(name) == existing.get(name):
+                score += weight
+                reasons.append(f"Matched {name.replace('_', ' ')}")
 
-        if current["ip"] and current["ip"] == existing["ip"]:
-            score += 25
-            reasons.append("Grouped because same IP was detected within 15 minutes")
-
-        if current["hostname"] and current["hostname"] == existing["hostname"]:
-            score += 20
-            reasons.append("Grouped because same hostname/device was detected within 15 minutes")
-
-        time_delta = abs(self._to_utc(alert.created_at) - self._to_utc(candidate.created_at))
-        if time_delta <= timedelta(minutes=self.DEFAULT_WINDOW_MINUTES):
+        current_mitre = set(current["technique_ids"])
+        existing_mitre = set(existing["technique_ids"])
+        if current_mitre & existing_mitre:
+            score += 15
+            reasons.append("Matched MITRE technique or sub-technique")
+        if current.get("tactics") and set(current["tactics"]) & set(existing["tactics"]):
             score += 10
-            reasons.append("Grouped because alerts occurred within the 15 minute correlation window")
+            reasons.append("Matched MITRE tactic")
+
+        time_delta = abs(self._observed_at(alert) - self._observed_at(candidate))
+        if time_delta <= timedelta(minutes=self.window_minutes):
+            proximity = max(5.0, 15.0 * (1 - time_delta.total_seconds() / (self.window_minutes * 60)))
+            score += proximity
+            reasons.append(f"Occurred within the {self.window_minutes}-minute correlation window")
 
         if self._is_account_takeover_pattern(alert, candidate):
             score += 25
@@ -233,7 +257,9 @@ class CorrelationService:
             attack_techniques = alert.incident.attack_technique or []
         
         if isinstance(attack_techniques, dict):
-            return [str(k) for k in attack_techniques.keys()]
+            if attack_techniques.get("technique_id"):
+                return [str(attack_techniques["technique_id"])]
+            return [str(k) for k in attack_techniques.keys() if str(k).startswith("T")]
         elif isinstance(attack_techniques, list):
             return [str(t) for t in attack_techniques]
         return []
@@ -305,23 +331,54 @@ class CorrelationService:
         )
 
     def _indicators(self, alert: Alert) -> dict:
+        identifiers = self._identifiers(alert)
+        return {"user": identifiers["source_user"], "ip": identifiers["source_ip"] or identifiers["destination_ip"], "hostname": identifiers["hostname"]}
+
+    def _identifiers(self, alert: Alert) -> dict[str, Any]:
         raw = alert.raw_data or {}
         ocsf = alert.ocsf_data or {}
-        user = ocsf.get("user")
-        source = ocsf.get("source")
-        destination = ocsf.get("destination")
+        event_data = (alert.event.normalized_event if alert.event else None) or {}
+        combined = {**raw, **event_data}
+        user = ocsf.get("user") or {}
+        source = ocsf.get("source") or {}
+        destination = ocsf.get("destination") or {}
         device = ocsf.get("device")
+        technique_ids = self._extract_mitre_techniques(alert)
+        tactics = []
+        for item in (ocsf.get("attack_tactics") or []):
+            tactics.append(str(item.get("name") if isinstance(item, dict) else item))
         return {
-            "user": raw.get("user") or self._field_value(user, "name"),
-            "ip": raw.get("ip")
-            or raw.get("source_ip")
-            or self._field_value(source, "ip")
-            or self._field_value(destination, "ip"),
-            "hostname": raw.get("hostname")
-            or raw.get("device")
-            or raw.get("host")
+            "hostname": combined.get("hostname") or combined.get("machine") or combined.get("device") or combined.get("host")
             or self._field_value(device, "hostname"),
+            "agent_id": combined.get("agent_id") or (
+                combined.get("agent", {}).get("id") if isinstance(combined.get("agent"), dict) else None
+            ),
+            "rule_id": alert.detection_rule_id or combined.get("rule_id"),
+            "source_ip": combined.get("source_ip") or combined.get("src_ip") or self._field_value(source, "ip"),
+            "source_host": combined.get("source_host") or combined.get("src_host") or self._field_value(source, "hostname"),
+            "source_user": combined.get("source_user") or combined.get("user") or self._field_value(source, "user") or self._field_value(user, "name"),
+            "source_port": combined.get("source_port") or combined.get("src_port") or self._field_value(source, "port"),
+            "destination_ip": combined.get("destination_ip") or combined.get("dst_ip") or self._field_value(destination, "ip"),
+            "destination_host": combined.get("destination_host") or combined.get("dst_host") or self._field_value(destination, "hostname"),
+            "destination_user": combined.get("destination_user") or self._field_value(destination, "user"),
+            "destination_port": combined.get("destination_port") or combined.get("dst_port") or self._field_value(destination, "port"),
+            "technique_ids": technique_ids,
+            "tactics": tactics,
         }
+
+    def _matched_identifier_names(self, alert: Alert, candidate: Alert) -> list[str]:
+        left, right = self._identifiers(alert), self._identifiers(candidate)
+        names = []
+        for key in ("hostname", "agent_id", "rule_id", "source_ip", "source_host", "source_user", "source_port", "destination_ip", "destination_host", "destination_user", "destination_port"):
+            if left.get(key) is not None and left.get(key) == right.get(key):
+                names.append(key)
+        if set(left["technique_ids"]) & set(right["technique_ids"]):
+            names.append("mitre_technique")
+        return names
+
+    def _observed_at(self, alert: Alert) -> datetime:
+        value = alert.event.timestamp if alert.event and alert.event.timestamp else alert.created_at
+        return self._to_utc(value)
 
     def _field_value(self, value: Any, key: str) -> Any:
         if isinstance(value, dict):
@@ -351,7 +408,7 @@ class CorrelationService:
 
     def _standalone_reason(self, alert: Alert) -> str:
         class_name = str((alert.ocsf_data or {}).get("class_name", "Security"))
-        return f"Standalone {class_name.lower()} alert created a new incident for analyst review"
+        return f"Pending {class_name.lower()} alert awaiting a related alert within the correlation window"
 
     def _to_utc(self, value: datetime) -> datetime:
         if value.tzinfo is None:

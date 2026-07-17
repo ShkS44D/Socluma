@@ -91,7 +91,7 @@ def create_alert_external(
 
     if settings.USE_REDIS_MOCK:
         incident = incident_service.process_alert(db, alert)
-        logger.info(f"Alert {alert.id} processed synchronously into incident {incident.id}")
+        logger.info("Alert %s correlation result: %s", alert.id, incident.id if incident else "pending")
     else:
         try:
             process_alert_for_incident.delay(alert.id)
@@ -99,7 +99,7 @@ def create_alert_external(
         except Exception:
             logger.exception("Failed to enqueue alert incident processing; processing synchronously", extra={"alert_id": alert.id})
             incident = incident_service.process_alert(db, alert)
-            logger.info(f"Alert {alert.id} processed synchronously into incident {incident.id}")
+            logger.info("Alert %s correlation result: %s", alert.id, incident.id if incident else "pending")
 
     db.refresh(alert)
     audit_service.record(
@@ -164,7 +164,7 @@ def create_alert(
 
     if settings.USE_REDIS_MOCK:
         incident = incident_service.process_alert(db, alert)
-        logger.info(f"Alert {alert.id} processed synchronously into incident {incident.id}")
+        logger.info("Alert %s correlation result: %s", alert.id, incident.id if incident else "pending")
     else:
         try:
             process_alert_for_incident.delay(alert.id)
@@ -172,7 +172,7 @@ def create_alert(
         except Exception:
             logger.exception("Failed to enqueue alert incident processing; processing synchronously", extra={"alert_id": alert.id})
             incident = incident_service.process_alert(db, alert)
-            logger.info(f"Alert {alert.id} processed synchronously into incident {incident.id}")
+            logger.info("Alert %s correlation result: %s", alert.id, incident.id if incident else "pending")
 
     db.refresh(alert)
     audit_service.record(
@@ -350,7 +350,7 @@ def create_incident_from_alert(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))
 ):
-    """Create an incident from an alert"""
+    """Submit an alert to deterministic correlation; lone alerts remain pending."""
     validate_uuid(alert_id, "alert_id")
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
@@ -370,6 +370,11 @@ def create_incident_from_alert(
         )
     
     incident = incident_service.process_alert(db, alert)
+    if incident is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Alert is pending correlation and does not yet qualify for an incident",
+        )
     
     audit_service.record(
         db,

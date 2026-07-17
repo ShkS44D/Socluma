@@ -18,6 +18,7 @@ import {
   Mail as InvitationsIcon,
   VpnKey as ApiKeysIcon,
   Psychology as AIIcon,
+  GridView as MatrixIcon,
 } from '@mui/icons-material'
 import AppSidebar, { NavigationItem } from './AppSidebar'
 import MainContent from './MainContent'
@@ -55,6 +56,7 @@ const DashboardLayout: React.FC = () => {
       { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', group: 'Overview' },
       { text: 'Alerts', icon: <AlertsIcon />, path: '/alerts', group: 'Investigations' },
       { text: 'Incidents', icon: <IncidentsIcon />, path: '/incidents', group: 'Investigations' },
+      { text: 'MITRE Matrix', icon: <MatrixIcon />, path: '/mitre-matrix', group: 'Investigations' },
       { text: 'AI Copilot', icon: <AIIcon />, path: '/ai', group: 'Investigations' },
     ]
 
@@ -97,6 +99,7 @@ const DashboardLayout: React.FC = () => {
       dashboard: 'Dashboard',
       alerts: 'Alerts',
       incidents: 'Incidents',
+      'mitre-matrix': 'MITRE Matrix',
       'threat-intel': 'Threat Intelligence',
       'detection-rules': 'Detection Rules',
       playbooks: 'Playbooks',

@@ -113,6 +113,24 @@ def get_feedback_stats(
     return incident_service.get_feedback_stats(db, current_user.tenant_id)
 
 
+@router.get("/mitre-matrix")
+def get_mitre_matrix(
+    created_from: Optional[datetime] = None,
+    created_to: Optional[datetime] = None,
+    severity: Optional[Severity] = None,
+    status: Optional[IncidentStatus] = None,
+    incident_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if incident_id:
+        validate_uuid(incident_id, "incident_id")
+    return incident_service.get_mitre_matrix(
+        db, current_user.tenant_id, created_from=created_from, created_to=created_to,
+        severity=severity, status=status, incident_id=incident_id,
+    )
+
+
 @router.get("/assigned", response_model=list[IncidentResponse])
 def get_assigned_incidents(
     db: Session = Depends(get_db),

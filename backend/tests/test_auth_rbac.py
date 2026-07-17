@@ -77,6 +77,26 @@ class AuthAndRbacTests(unittest.TestCase):
 
         app.dependency_overrides[get_current_user] = override_get_current_user
 
+    def _create_correlated_incident(self, source: str, raw_data: dict) -> str:
+        base = {
+            "hostname": "rbac-host-01",
+            "agent_id": "rbac-agent-01",
+            "source_ip": "10.0.0.5",
+            **raw_data,
+        }
+        first = self.client.post("/api/v1/alerts", json={"source": source, "raw_data": base})
+        self.assertEqual(first.status_code, 201)
+        second = self.client.post(
+            "/api/v1/alerts",
+            json={"source": source, "raw_data": {**base, "event_id": "follow-up-alert"}},
+        )
+        self.assertEqual(second.status_code, 201)
+        incidents_response = self.client.get("/api/v1/incidents")
+        self.assertEqual(incidents_response.status_code, 200)
+        items = incidents_response.json()["items"]
+        self.assertEqual(len(items), 1)
+        return items[0]["id"]
+
     def test_register_login_and_me_records_audit_events(self):
         register_response = self.client.post(
             "/api/v1/auth/register",
@@ -140,22 +160,15 @@ class AuthAndRbacTests(unittest.TestCase):
         user_id = self._create_user(UserRole.ANALYST)
         self._override_current_user(user_id)
 
-        alert_response = self.client.post(
-            "/api/v1/alerts",
-            json={
-                "source": "antivirus",
-                "raw_data": {
-                    "event_type": "malware_detection",
-                    "malware_name": "Trojan.Generic.12345",
-                    "file_hash": "abc123",
-                    "severity": "critical",
-                },
+        incident_id = self._create_correlated_incident(
+            "antivirus",
+            {
+                "event_type": "malware_detection",
+                "malware_name": "Trojan.Generic.12345",
+                "file_hash": "abc123",
+                "severity": "critical",
             },
         )
-        self.assertEqual(alert_response.status_code, 201)
-
-        incidents_response = self.client.get("/api/v1/incidents")
-        incident_id = incidents_response.json()["items"][0]["id"]
 
         feedback_response = self.client.post(
             f"/api/v1/incidents/{incident_id}/feedback",
@@ -177,20 +190,14 @@ class AuthAndRbacTests(unittest.TestCase):
         analyst_id = self._create_user(UserRole.ANALYST)
 
         self._override_current_user(admin_id)
-        alert_response = self.client.post(
-            "/api/v1/alerts",
-            json={
-                "source": "ids",
-                "raw_data": {
-                    "event_type": "suspicious_network",
-                    "source_ip": "10.0.0.5",
-                    "destination_ip": "198.51.100.25",
-                    "severity": "high",
-                },
+        incident_id = self._create_correlated_incident(
+            "ids",
+            {
+                "event_type": "suspicious_network",
+                "destination_ip": "198.51.100.25",
+                "severity": "high",
             },
         )
-        self.assertEqual(alert_response.status_code, 201)
-        incident_id = self.client.get("/api/v1/incidents").json()["items"][0]["id"]
 
         assign_response = self.client.post(
             f"/api/v1/incidents/{incident_id}/assign",
@@ -221,19 +228,14 @@ class AuthAndRbacTests(unittest.TestCase):
         analyst_id = self._create_user(UserRole.ANALYST)
         self._override_current_user(analyst_id)
 
-        self.client.post(
-            "/api/v1/alerts",
-            json={
-                "source": "ids",
-                "raw_data": {
-                    "event_type": "suspicious_network",
-                    "source_ip": "10.0.0.5",
-                    "destination_ip": "198.51.100.25",
-                    "severity": "medium",
-                },
+        incident_id = self._create_correlated_incident(
+            "ids",
+            {
+                "event_type": "suspicious_network",
+                "destination_ip": "198.51.100.25",
+                "severity": "medium",
             },
         )
-        incident_id = self.client.get("/api/v1/incidents").json()["items"][0]["id"]
 
         viewer_id = self._create_user(UserRole.VIEWER)
         self._override_current_user(viewer_id)
@@ -255,19 +257,14 @@ class AuthAndRbacTests(unittest.TestCase):
         analyst_id = self._create_user(UserRole.ANALYST)
 
         self._override_current_user(analyst_id)
-        self.client.post(
-            "/api/v1/alerts",
-            json={
-                "source": "ids",
-                "raw_data": {
-                    "event_type": "suspicious_network",
-                    "source_ip": "10.0.0.5",
-                    "destination_ip": "198.51.100.25",
-                    "severity": "medium",
-                },
+        incident_id = self._create_correlated_incident(
+            "ids",
+            {
+                "event_type": "suspicious_network",
+                "destination_ip": "198.51.100.25",
+                "severity": "medium",
             },
         )
-        incident_id = self.client.get("/api/v1/incidents").json()["items"][0]["id"]
 
         viewer_id = self._create_user(UserRole.VIEWER)
         self._override_current_user(viewer_id)

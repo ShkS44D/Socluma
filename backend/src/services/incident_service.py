@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
-from sqlalchemy import asc, case, desc, func, or_
+from sqlalchemy import asc, case, desc, func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 from src.core.logging import logger
@@ -26,12 +26,15 @@ from src.models.pydantic import Incident as IncidentSchema
 from src.models.pydantic import IncidentDetail, IncidentListResponse, IncidentStats
 from src.models.sqlalchemy import (
     Alert,
+    AIInvestigationArtifact,
     AlertSource,
     AuditLog,
     IncidentEvidence,
     InvestigationNote,
     Incident,
     IncidentAlert,
+    IncidentMitreMapping,
+    MitreTechnique,
     IncidentStatus,
     IncidentPriority,
     Severity,
@@ -60,8 +63,22 @@ class IncidentService:
         IncidentStatus.CLOSED: (),
     }
 
-    def process_alert(self, db: Session, alert: Alert) -> Incident:
+    def process_alert(self, db: Session, alert: Alert) -> Incident | None:
+        if db.get_bind().dialect.name == "postgresql":
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:scope))"), {"scope": f"incident-correlation:{alert.tenant_id}"})
+        alert = db.query(Alert).filter(Alert.id == alert.id, Alert.tenant_id == alert.tenant_id).with_for_update().one()
+        if alert.incident_id:
+            return db.query(Incident).filter(Incident.id == alert.incident_id, Incident.tenant_id == alert.tenant_id).first()
         candidate = correlation_service.correlate_alert(db, alert)
+        if not candidate.qualified or len({item.id for item in candidate.alerts}) < correlation_service.minimum_alerts:
+            logger.info(
+                "Alert retained pending correlation",
+                extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": None,
+                       "correlation_score": candidate.correlation_score, "matched_identifiers": candidate.matched_identifiers or [],
+                       "correlation_window": correlation_service.window_minutes, "decision": "pending"},
+            )
+            db.commit()
+            return None
         title, description = correlation_service.derive_incident_metadata(candidate.alerts)
         threat_intel_results = threat_intel_service.lookup_incident_indicators(db, candidate.alerts)
         risk = risk_service.calculate_risk(
@@ -98,6 +115,13 @@ class IncidentService:
                 triggering_alert_id=alert.id,
             )
 
+        logger.info(
+            "Correlation decision completed",
+            extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": incident.id,
+                   "correlation_score": candidate.correlation_score, "matched_identifiers": candidate.matched_identifiers or [],
+                   "correlation_window": correlation_service.window_minutes,
+                   "decision": "updated" if candidate.incident else "created"},
+        )
         return incident
 
     def list_incidents(
@@ -170,6 +194,7 @@ class IncidentService:
             db.query(Incident)
             .options(
                 joinedload(Incident.assigned_analyst),
+                joinedload(Incident.mitre_mappings),
             )
             .filter(Incident.id == incident_id, Incident.tenant_id == tenant_id)
             .first()
@@ -240,6 +265,7 @@ class IncidentService:
             resolved_at=incident.resolved_at,
             related_alerts=related_alerts,
             correlation_reasons=correlation_reasons,
+            mitre_mappings=sorted(incident.mitre_mappings, key=lambda item: (item.stage_order, item.technique_id)),
             related_alert_total=related_alert_total,
             related_alert_page=alert_page,
             related_alert_page_size=alert_page_size,
@@ -695,6 +721,48 @@ class IncidentService:
             analyst_activity=analyst_activity[:5],
         )
 
+    def get_mitre_matrix(
+        self, db: Session, tenant_id: str, *, created_from: datetime | None = None,
+        created_to: datetime | None = None, severity: Severity | None = None,
+        status: IncidentStatus | None = None, incident_id: str | None = None,
+    ) -> dict[str, Any]:
+        correlated = db.query(
+            IncidentAlert.incident_id.label("incident_id"), func.count(IncidentAlert.alert_id).label("alert_count")
+        ).group_by(IncidentAlert.incident_id).having(func.count(IncidentAlert.alert_id) >= 2).subquery()
+        query = db.query(IncidentMitreMapping, Incident).join(
+            Incident,
+            (Incident.id == IncidentMitreMapping.incident_id) &
+            (Incident.tenant_id == IncidentMitreMapping.tenant_id),
+        ).join(correlated, correlated.c.incident_id == Incident.id).filter(IncidentMitreMapping.tenant_id == tenant_id)
+        if created_from:
+            query = query.filter(Incident.created_at >= created_from)
+        if created_to:
+            query = query.filter(Incident.created_at <= created_to)
+        if severity:
+            query = query.filter(Incident.severity == severity)
+        if status:
+            query = query.filter(Incident.status == status)
+        if incident_id:
+            query = query.filter(Incident.id == incident_id)
+        grouped: dict[tuple[str, str], dict[str, Any]] = {}
+        for mapping, incident in query.order_by(IncidentMitreMapping.stage_order, IncidentMitreMapping.technique_id).all():
+            key = (mapping.tactic, mapping.technique_id)
+            item = grouped.setdefault(key, {
+                "tactic": mapping.tactic, "technique_id": mapping.technique_id,
+                "technique_name": mapping.technique_name, "sub_technique_id": mapping.sub_technique_id,
+                "sub_technique_name": mapping.sub_technique_name, "attack_stage_order": mapping.stage_order,
+                "incident_count": 0, "incidents": [],
+            })
+            item["incident_count"] += 1
+            item["incidents"].append({
+                "id": incident.id, "title": incident.title,
+                "severity": incident.severity.value if hasattr(incident.severity, "value") else str(incident.severity),
+                "status": incident.status.value if hasattr(incident.status, "value") else str(incident.status),
+                "confidence": mapping.confidence,
+                "first_seen_at": mapping.first_seen_at, "last_seen_at": mapping.last_seen_at,
+            })
+        return {"techniques": list(grouped.values()), "incident_count": len({row["id"] for item in grouped.values() for row in item["incidents"]})}
+
     def serialize_incident(self, incident: Incident, alert_count: int | None = None) -> IncidentSchema:
         return IncidentSchema(
             id=incident.id,
@@ -777,6 +845,7 @@ class IncidentService:
             created=True,
             triggering_alert_id=triggering_alert_id,
         )
+        self._sync_mitre_mappings(db, incident, alerts, candidate)
         threat_intel_service.persist_incident_results(db, tenant_id, incident.id, threat_intel_results)
         self._extract_and_associate_iocs(db, tenant_id, incident.id, alerts)
         db.commit()
@@ -794,12 +863,11 @@ class IncidentService:
             "created_at": utc_isoformat(incident.created_at)
         })
 
-        # Auto-run configured AI analysis on new incidents
         try:
             self._run_ai_analysis(db, tenant_id, incident)
         except Exception:
-            logger.exception("AI analysis failed after incident creation", extra={"incident_id": incident.id})
-        
+            logger.exception("AI analysis failed after correlated incident creation", extra={"incident_id": incident.id})
+
         return incident
 
     def _update_existing_incident(
@@ -821,6 +889,7 @@ class IncidentService:
         incident.attack_technique = self._derive_attack_technique(alerts)
         incident.recommended_actions = self._derive_recommended_actions(alerts)
         incident.threat_intel_results = threat_intel_results
+        self._invalidate_ai_analysis(db, incident)
         db.add(incident)
         self._sync_incident_links(db, incident, alerts, candidate)
         db.flush()
@@ -834,6 +903,7 @@ class IncidentService:
             created=False,
             triggering_alert_id=triggering_alert_id,
         )
+        self._sync_mitre_mappings(db, incident, alerts, candidate)
         threat_intel_service.persist_incident_results(db, incident.tenant_id, incident.id, threat_intel_results)
         self._extract_and_associate_iocs(db, incident.tenant_id, incident.id, alerts)
         db.commit()
@@ -886,7 +956,10 @@ class IncidentService:
         }
         link_reason = "; ".join(candidate.correlation_reasons)
 
-        for alert in alerts:
+        ordered_alerts = sorted(alerts, key=lambda item: correlation_service._observed_at(item))
+        primary_id = ordered_alerts[0].id if ordered_alerts else None
+        primary_time = correlation_service._observed_at(ordered_alerts[0]) if ordered_alerts else None
+        for sequence, alert in enumerate(ordered_alerts):
             alert.incident_id = incident.id
             alert.risk_score = incident.risk_score
             db.add(alert)
@@ -898,8 +971,82 @@ class IncidentService:
                         alert_id=alert.id,
                         correlation_score=float(candidate.correlation_score or 0),
                         correlation_reason=link_reason,
+                        is_primary=alert.id == primary_id,
+                        sequence_order=sequence,
+                        matching_indicators=[{"field": name} for name in (candidate.matched_identifiers or [])],
+                        time_delta_seconds=abs((correlation_service._observed_at(alert) - primary_time).total_seconds()) if primary_time else 0,
                     )
                 )
+            else:
+                link = existing_links[alert.id]
+                link.sequence_order = sequence
+                link.is_primary = alert.id == primary_id
+                link.correlation_score = float(candidate.correlation_score or 0)
+                link.correlation_reason = link_reason
+                db.add(link)
+
+    def _invalidate_ai_analysis(self, db: Session, incident: Incident) -> None:
+        incident.ai_summary = None
+        incident.why_suspicious = None
+        incident.ai_analyzed_at = None
+        db.query(AIInvestigationArtifact).filter(
+            AIInvestigationArtifact.tenant_id == incident.tenant_id,
+            AIInvestigationArtifact.incident_id == incident.id,
+        ).delete(synchronize_session=False)
+
+    def _sync_mitre_mappings(
+        self, db: Session, incident: Incident, alerts: Sequence[Alert], candidate: CorrelationCandidate
+    ) -> None:
+        tactic_order = ["Reconnaissance", "Resource Development", "Initial Access", "Execution", "Persistence",
+                        "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
+                        "Collection", "Command and Control", "Exfiltration", "Impact"]
+        existing = {row.technique_id: row for row in db.query(IncidentMitreMapping).filter(
+            IncidentMitreMapping.tenant_id == incident.tenant_id,
+            IncidentMitreMapping.incident_id == incident.id,
+        ).all()}
+        grouped: dict[str, list[Alert]] = defaultdict(list)
+        for alert in alerts:
+            for technique_id in correlation_service._extract_mitre_techniques(alert):
+                grouped[technique_id].append(alert)
+        for technique_id, supporting in grouped.items():
+            base_id = technique_id.split(".", 1)[0]
+            technique = db.query(MitreTechnique).filter(MitreTechnique.technique_id.in_([technique_id, base_id])).order_by(
+                case((MitreTechnique.technique_id == technique_id, 0), else_=1)
+            ).first()
+            tactic = technique.tactic.value if technique else "Unknown"
+            tactic = tactic.replace("_", " ").title()
+            source_ids = list(dict.fromkeys(item.id for item in supporting))
+            observed = [correlation_service._observed_at(item) for item in supporting]
+            temporal = 1.0 if max(observed) - min(observed) <= timedelta(minutes=correlation_service.window_minutes) else 0.5
+            entity_strength = min(1.0, len(candidate.matched_identifiers or []) / 3)
+            alert_quality = sum(1.0 if item.why_matched else 0.6 for item in supporting) / len(supporting)
+            support_strength = min(1.0, len(source_ids) / 3)
+            sequence_strength = 1.0 if tactic in tactic_order else 0.5
+            confidence = round(100 * (0.30 * candidate.correlation_score / 100 + 0.20 * entity_strength +
+                                      0.15 * temporal + 0.15 * sequence_strength + 0.10 * alert_quality +
+                                      0.10 * support_strength), 1)
+            row = existing.get(technique_id) or IncidentMitreMapping(
+                tenant_id=incident.tenant_id, incident_id=incident.id, technique_id=technique_id
+            )
+            row.tactic = tactic
+            row.technique_name = technique.name if technique else self._mitre_name(technique_id)
+            row.sub_technique_id = technique_id if "." in technique_id else None
+            row.sub_technique_name = row.technique_name if row.sub_technique_id else None
+            row.confidence = confidence
+            row.confidence_reasons = [
+                f"Correlation strength: {candidate.correlation_score:.0f}/100",
+                f"Matched identifiers: {', '.join(candidate.matched_identifiers or []) or 'MITRE and time proximity'}",
+                f"Supporting alerts: {len(source_ids)}", f"Temporal proximity factor: {temporal:.1f}",
+            ]
+            row.supporting_evidence = [
+                {"alert_id": item.id, "event_id": item.event_id, "rule_id": item.detection_rule_id,
+                 "why_matched": item.why_matched, "observed_at": utc_isoformat(correlation_service._observed_at(item))}
+                for item in supporting
+            ]
+            row.source_alert_ids = source_ids
+            row.stage_order = tactic_order.index(tactic) if tactic in tactic_order else len(tactic_order)
+            row.first_seen_at, row.last_seen_at = min(observed), max(observed)
+            db.add(row)
 
     def _derive_attack_technique(self, alerts: Sequence[Alert]) -> dict[str, Any] | None:
         for alert in alerts:

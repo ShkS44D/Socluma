@@ -20,6 +20,9 @@ def process_alert_for_incident_sync(alert_id: str) -> str:
             raise ValueError("Alert not found")
 
         incident = incident_service.process_alert(db, alert)
+        if incident is None:
+            logger.info("Alert %s retained pending correlation", alert_id)
+            return f"pending:{alert_id}"
         logger.info("Processed alert %s into incident %s", alert_id, incident.id)
         return incident.id
     except Exception:

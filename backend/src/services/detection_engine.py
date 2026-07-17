@@ -132,13 +132,14 @@ class DetectionEngine:
             
             if settings.USE_REDIS_MOCK:
                 incident = incident_service.process_alert(db, alert)
-                incident_created = True
-                incident_id = incident.id
+                incident_created = incident is not None
+                incident_id = incident.id if incident else None
             else:
                 from src.workers.tasks import process_alert_for_incident_sync
                 try:
-                    incident_id = process_alert_for_incident_sync(alert.id)
-                    incident_created = True
+                    result = process_alert_for_incident_sync(alert.id)
+                    incident_created = not result.startswith("pending:")
+                    incident_id = result if incident_created else None
                 except Exception:
                     logger.exception("Sync incident processing failed; alert was stored", extra={"alert_id": alert.id})
         

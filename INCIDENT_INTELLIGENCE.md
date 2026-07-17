@@ -2,6 +2,22 @@
 
 This document describes the implemented incident provenance and incident-scoped AI behavior in TriageOps.
 
+## Correlation-driven lifecycle
+
+Detection creates and retains alerts first. A single unmatched alert remains open with no `incident_id`; it stays eligible for future correlation and is never discarded. A normal detection-engine incident is created only when at least two distinct alerts reach the deterministic threshold (`CORRELATION_MIN_ALERTS=2`, `CORRELATION_MIN_SCORE=45`) within `CORRELATION_WINDOW_MINUTES=15`. Manual, Playbook, and historical incidents remain supported and are explicitly labelled by provenance.
+
+Correlation compares MITRE tactic/technique/sub-technique, hostname, agent ID, rule ID, source/destination IP, host, user and port, plus source-event time. Host and agent identity carry the strongest weights; source/destination identity, MITRE, rules, and bounded temporal proximity contribute additional score. Time alone cannot qualify a pair. Structured logs record tenant, alert, incident, score, matched identifiers, window, and decision.
+
+Correlated alerts are linked once, ordered by source-event time, and safely reordered for late arrivals. Row locking and existing association checks make worker retries idempotent. Every correlated-alert change recalculates provenance, risk, first/last seen, attack-stage order and MITRE mappings, and invalidates stored AI analysis so stale alert counts and risk scores are not displayed.
+
+## MITRE mappings and confidence
+
+Incidents support multiple persisted mappings. Each mapping stores tactic, technique, optional sub-technique, technique ID, stage order, first/last seen, source alert IDs, real alert/rule/event evidence, confidence, and confidence reasons. Confidence combines correlation strength (30%), matching entities (20%), temporal proximity (15%), MITRE sequence consistency (15%), alert evidence quality (10%), and supporting-alert count (10%). AI neither decides correlation nor invents mapping evidence.
+
+`GET /api/v1/incidents/mitre-matrix` aggregates persisted incident mappings—not raw alerts—and enforces tenant scope. Filters include date range, severity, status, and incident. The migration preserves old single-alert incidents and copies legacy JSON mapping metadata only when a technique ID already exists; no source evidence is fabricated.
+
+Troubleshooting: pending alerts are expected until a qualifying peer arrives. If expected alerts do not correlate, inspect normalized identifiers, event timestamps, and structured decision logs. If a matrix technique is absent, verify detection-rule or OCSF MITRE data. Restart backend and workers after changing correlation configuration.
+
 ## Incident Creation
 
 An incident can be created by detection and correlation workflows or by a Playbook step. ORM-created incidents default to a manual origin. Detection-created incidents retain the alert that first caused incident creation as their deterministic primary alert. Alerts added later retain their recorded correlation reason, score, sequence, risk contribution, matching entities and indicators, and time difference from the primary alert.

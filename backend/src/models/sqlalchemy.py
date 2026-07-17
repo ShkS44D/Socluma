@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, Text, Float, JSON, Enum, ForeignKey, Integer, BigInteger, Index
+    Column, String, Boolean, DateTime, Text, Float, JSON, Enum, ForeignKey, Integer, BigInteger, Index, UniqueConstraint
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -541,6 +541,37 @@ class Incident(Base):
     ai_artifacts = relationship("AIInvestigationArtifact", back_populates="incident", cascade="all, delete-orphan")
     ai_conversations = relationship("AIInvestigationConversation", back_populates="incident", cascade="all, delete-orphan")
     entities = relationship("IncidentEntity", back_populates="incident", cascade="all, delete-orphan")
+    mitre_mappings = relationship("IncidentMitreMapping", back_populates="incident", cascade="all, delete-orphan")
+
+
+class IncidentMitreMapping(Base):
+    __tablename__ = "incident_mitre_mappings"
+    __table_args__ = (
+        UniqueConstraint("incident_id", "technique_id", name="uq_incident_mitre_mapping"),
+        Index("ix_incident_mitre_tenant_tactic", "tenant_id", "tactic"),
+        Index("ix_incident_mitre_tenant_technique", "tenant_id", "technique_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id = Column(String(36), ForeignKey("tenants.id"), nullable=False)
+    incident_id = Column(String(36), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
+    tactic = Column(String(100), nullable=False)
+    technique_id = Column(String(50), nullable=False)
+    technique_name = Column(String(255), nullable=False)
+    sub_technique_id = Column(String(50), nullable=True)
+    sub_technique_name = Column(String(255), nullable=True)
+    confidence = Column(Float, nullable=False, default=0)
+    confidence_reasons = Column(JSON, nullable=False, default=list)
+    supporting_evidence = Column(JSON, nullable=False, default=list)
+    source_alert_ids = Column(JSON, nullable=False, default=list)
+    stage_order = Column(Integer, nullable=False, default=0)
+    first_seen_at = Column(DateTime(timezone=True), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    tenant = relationship("Tenant")
+    incident = relationship("Incident", back_populates="mitre_mappings")
 
 
 class AIInvestigationArtifact(Base):
@@ -614,6 +645,7 @@ class AIInvestigationMessage(Base):
 class IncidentAlert(Base):
     __tablename__ = "incident_alerts"
     __table_args__ = (
+        UniqueConstraint("incident_id", "alert_id", name="uq_incident_alerts_incident_alert"),
         Index("ix_incident_alerts_incident_id", "incident_id"),
         Index("ix_incident_alerts_alert_id", "alert_id"),
         Index("ix_incident_alerts_incident_alert", "incident_id", "alert_id"),
@@ -1051,7 +1083,7 @@ class MitreTechnique(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     technique_id = Column(String(50), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
-    tactic = Column(Enum(MitreTactic), nullable=False)
+    tactic = Column(Enum(MitreTactic, values_callable=lambda values: [item.value for item in values]), nullable=False)
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

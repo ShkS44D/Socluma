@@ -125,11 +125,16 @@ class IncidentApiTests(unittest.TestCase):
                     "file_hash": "abc123",
                     "severity": "critical",
                     "timestamp": "2026-06-25T11:00:00",
+                    "hostname": "malware-host", "agent_id": "edr-01",
                 },
             },
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()["ocsf_data"]["class_name"], "Malware")
+        self.client.post("/api/v1/alerts", json={"source": "antivirus", "raw_data": {
+            "source": "antivirus", "event_type": "malware_detection", "malware_name": "Trojan.Generic.12345",
+            "file_hash": "def456", "severity": "critical", "timestamp": "2026-06-25T11:02:00",
+            "hostname": "malware-host", "agent_id": "edr-01"}})
 
         incidents_response = self.client.get("/api/v1/incidents")
         self.assertEqual(incidents_response.status_code, 200)
@@ -259,9 +264,14 @@ class IncidentApiTests(unittest.TestCase):
                     "file_hash": "abc123",
                     "severity": "critical",
                     "timestamp": "2026-06-25T11:00:00",
+                    "hostname": "malware-host", "agent_id": "edr-01",
                 },
             },
         )
+        self.client.post("/api/v1/alerts", json={"source": "antivirus", "raw_data": {
+            "source": "antivirus", "event_type": "malware_detection", "malware_name": "Trojan.Generic.12345",
+            "file_hash": "def456", "severity": "critical", "timestamp": "2026-06-25T11:02:00",
+            "hostname": "malware-host", "agent_id": "edr-01"}})
 
         incidents_response = self.client.get("/api/v1/incidents")
         incident_id = incidents_response.json()["items"][0]["id"]
@@ -283,9 +293,14 @@ class IncidentApiTests(unittest.TestCase):
                     "file_hash": "abc123",
                     "severity": "critical",
                     "timestamp": "2026-06-25T11:00:00",
+                    "hostname": "malware-host", "agent_id": "edr-01",
                 },
             },
         )
+        self.client.post("/api/v1/alerts", json={"source": "antivirus", "raw_data": {
+            "source": "antivirus", "event_type": "malware_detection", "malware_name": "Trojan.Generic.12345",
+            "file_hash": "def456", "severity": "critical", "timestamp": "2026-06-25T11:02:00",
+            "hostname": "malware-host", "agent_id": "edr-01"}})
 
         incident_id = self.client.get("/api/v1/incidents").json()["items"][0]["id"]
         invalid_response = self.client.post(
@@ -332,6 +347,14 @@ class IncidentApiTests(unittest.TestCase):
                     "timestamp": "2026-06-25T12:00:00",
                 },
             },
+        )
+        self.client.post(
+            "/api/v1/alerts",
+            json={"source": "ids", "raw_data": {
+                "source": "ids", "event_type": "connection", "source_ip": "10.0.0.5",
+                "destination_ip": "198.51.100.26", "hostname": "srv-01", "severity": "high",
+                "timestamp": "2026-06-25T12:03:00",
+            }},
         )
         incident_id = self.client.get("/api/v1/incidents").json()["items"][0]["id"]
 

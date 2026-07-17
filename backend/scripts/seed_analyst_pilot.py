@@ -64,6 +64,11 @@ def _create_detection_scenario(db, user: User, name: str, simulation: str) -> In
 
     incident_ids: list[str] = []
     payloads = deepcopy(SOC_SIMULATION_SCENARIOS[simulation]["events"])
+    if len(payloads) == 1:
+        follow_up = deepcopy(payloads[0])
+        follow_up.setdefault("raw_event", {})["pilot_follow_up"] = True
+        follow_up.setdefault("normalized_event", {})["pilot_follow_up"] = True
+        payloads.append(follow_up)
     marker = name.lower().replace(" ", "-")
     for index, payload in enumerate(payloads):
         payload["source"] = f"pilot-{marker}"

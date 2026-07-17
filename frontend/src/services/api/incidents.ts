@@ -10,6 +10,7 @@ import {
   IncidentListResponse,
   IncidentPriority,
   IncidentStats,
+  MitreMatrixResponse,
   IncidentStatus,
   InvestigationNote,
   TimelineItem,
@@ -60,6 +61,11 @@ export const getIncidentExplanation = async (incidentId: string, signal?: AbortS
 
 export const getIncidentStats = async (): Promise<IncidentStats> => {
   const response = await api.get<IncidentStats>('/api/v1/incidents/stats')
+  return response.data
+}
+
+export const getMitreMatrix = async (params: Record<string, string | undefined> = {}): Promise<MitreMatrixResponse> => {
+  const response = await api.get<MitreMatrixResponse>('/api/v1/incidents/mitre-matrix', { params })
   return response.data
 }
 

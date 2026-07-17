@@ -644,6 +644,19 @@ class IncidentIntelligenceService:
         return sorted(rows, key=lambda item: ensure_utc(item["timestamp"]))[:200]
 
     def _mitre(self, incident: Incident, links: Sequence[IncidentAlert]) -> list[dict[str, Any]]:
+        if incident.mitre_mappings:
+            return [
+                {
+                    "tactic": row.tactic, "technique_id": row.technique_id,
+                    "technique_name": row.technique_name, "sub_technique_id": row.sub_technique_id,
+                    "sub_technique_name": row.sub_technique_name, "confidence": row.confidence,
+                    "confidence_reasons": row.confidence_reasons or [],
+                    "supporting_evidence": row.supporting_evidence or [],
+                    "related_source_alert_ids": row.source_alert_ids or [], "attack_stage_order": row.stage_order,
+                    "first_seen_at": row.first_seen_at, "last_seen_at": row.last_seen_at,
+                }
+                for row in sorted(incident.mitre_mappings, key=lambda item: (item.stage_order, item.technique_id))
+            ]
         techniques: dict[str, dict[str, Any]] = {}
         for link in links:
             rule = link.alert.detection_rule

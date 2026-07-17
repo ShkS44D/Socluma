@@ -484,10 +484,42 @@ export interface IncidentAlertContribution {
 export interface IncidentDetail extends Omit<Incident, 'alert_count'> {
   related_alerts: IncidentRelatedAlert[]
   correlation_reasons: string[]
+  mitre_mappings: IncidentMitreMapping[]
   related_alert_total: number
   related_alert_page: number
   related_alert_page_size: number
   related_alert_has_more: boolean
+}
+
+export interface IncidentMitreMapping {
+  tactic: string
+  technique_id: string
+  technique_name: string
+  sub_technique_id?: string | null
+  sub_technique_name?: string | null
+  confidence: number
+  confidence_reasons: string[]
+  supporting_evidence: Array<Record<string, any>>
+  source_alert_ids: string[]
+  stage_order: number
+  first_seen_at?: string | null
+  last_seen_at?: string | null
+}
+
+export interface MitreMatrixTechnique {
+  tactic: string
+  technique_id: string
+  technique_name: string
+  sub_technique_id?: string | null
+  sub_technique_name?: string | null
+  attack_stage_order: number
+  incident_count: number
+  incidents: Array<{ id: string; title: string; severity: string; status: string; confidence: number; first_seen_at?: string; last_seen_at?: string }>
+}
+
+export interface MitreMatrixResponse {
+  techniques: MitreMatrixTechnique[]
+  incident_count: number
 }
 
 export interface InvestigationNote {

@@ -135,7 +135,8 @@ class DetectionPipelineTests(unittest.TestCase):
         analysis_result = analysis_response.json()
         self.assertTrue(analysis_result.get("processed"))
         self.assertEqual(len(analysis_result.get("matched_rules")), 1)
-        self.assertTrue(analysis_result.get("incident_created"))
+        self.assertFalse(analysis_result.get("incident_created"))
+        self.assertIsNone(analysis_result.get("incident_id"))
         
         
         # 4. Verify with Image key too
@@ -266,8 +267,23 @@ class DetectionPipelineTests(unittest.TestCase):
         self.assertEqual(payload["detection_status"], "matched")
         self.assertEqual(payload["detection_count"], 1)
         self.assertEqual(len(payload["detections"]), 1)
-        self.assertTrue(payload["incident_created"])
-        self.assertIsNotNone(payload["incident_id"])
+        self.assertFalse(payload["incident_created"])
+        self.assertIsNone(payload["incident_id"])
+
+        follow_up = self.client.post(
+            "/api/v1/events/ingest",
+            json={
+                "source": "windows-agent", "event_type": "process", "timestamp": "2026-07-05T10:55:10Z",
+                "raw_event": {"timestamp": 1783264510, "event_id": 4688, "pilot_follow_up": True,
+                    "Image": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+                    "CommandLine": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA=="},
+                "normalized_event": {"image": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+                    "command_line": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA=="},
+                "severity": "high",
+            },
+        )
+        self.assertTrue(follow_up.json()["incident_created"])
+        self.assertIsNotNone(follow_up.json()["incident_id"])
 
         db = self.SessionTesting()
         try:
@@ -336,7 +352,7 @@ class DetectionPipelineTests(unittest.TestCase):
         self.assertEqual(duplicate_response.json()["id"], payload["id"])
         db = self.SessionTesting()
         try:
-            self.assertEqual(db.query(SecurityEvent).count(), 1)
+            self.assertEqual(db.query(SecurityEvent).count(), 2)
             self.assertEqual(db.query(Alert).filter(Alert.event_id == payload["id"]).count(), 1)
         finally:
             db.close()

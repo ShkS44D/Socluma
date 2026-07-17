@@ -443,6 +443,26 @@ const IncidentDetail: React.FC = () => {
         error={explanationError}
         onOpenCopilot={() => navigate(`/ai/incident-copilot?incidentId=${incident.id}`)}
       />
+      <SectionCard
+        title="MITRE ATT&CK progression"
+        action={<Button variant="outlined" onClick={() => navigate(`/mitre-matrix?incident_id=${incident.id}`)}>Open matrix</Button>}
+      >
+        {incident.mitre_mappings.length === 0 ? (
+          <Typography color="text.secondary">No evidence-backed MITRE mappings are available for this incident.</Typography>
+        ) : (
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ overflowX: 'auto' }}>
+            {incident.mitre_mappings.map((mapping) => (
+              <Paper key={mapping.technique_id} variant="outlined" sx={{ p: 2, minWidth: 240 }}>
+                <Typography variant="overline">Stage {mapping.stage_order + 1}: {mapping.tactic}</Typography>
+                <Typography variant="subtitle1">{mapping.sub_technique_id || mapping.technique_id} - {mapping.sub_technique_name || mapping.technique_name}</Typography>
+                <Chip size="small" label={`${mapping.confidence.toFixed(0)}% confidence`} sx={{ my: 1 }} />
+                <Typography variant="body2" color="text.secondary">{mapping.source_alert_ids.length} supporting alert(s)</Typography>
+                {mapping.confidence_reasons.slice(0, 2).map((reason) => <Typography key={reason} variant="caption" display="block">{reason}</Typography>)}
+              </Paper>
+            ))}
+          </Stack>
+        )}
+      </SectionCard>
       <SectionCard title="Incident Details">
         <IncidentTabs activeTab={activeTab} setActiveTab={setActiveTab} />
         <Box sx={{ pt: 3 }}>
