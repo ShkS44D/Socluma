@@ -272,6 +272,7 @@ The `detail` field is retained for backward compatibility with existing FastAPI 
 Backend regression tests:
 
 ```powershell
+python -m pip install -r backend/requirements-test.txt
 python -m pytest -q
 cd backend
 python -m pytest -q tests

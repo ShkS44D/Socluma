@@ -5,11 +5,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence, Any
 import hashlib
 import json
+from time import perf_counter
 
+from sqlalchemy import and_, exists, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from src.core.config import get_settings
-from src.models.sqlalchemy import Alert, AlertStatus, Incident, IncidentStatus, MitreTechnique
+from src.models.sqlalchemy import (
+    Alert,
+    AlertStatus,
+    Incident,
+    IncidentAlert,
+    IncidentStatus,
+    MitreTechnique,
+    SecurityEvent,
+)
 
 
 @dataclass
@@ -22,67 +32,110 @@ class CorrelationCandidate:
     duplicate_of: Optional[str] = None
     qualified: bool = False
     matched_identifiers: list[str] | None = None
+    candidate_alert_ids: list[str] | None = None
+    correlation_kind: str = "pending"
+    evaluated_candidate_count: int = 0
+    query_duration_ms: float = 0.0
 
 
 class CorrelationService:
     DUPLICATE_WINDOW_MINUTES = 60
+    CANDIDATE_PAGE_SIZE = 500
 
     def __init__(self) -> None:
         settings = get_settings()
         self.window_minutes = settings.CORRELATION_WINDOW_MINUTES
         self.minimum_score = settings.CORRELATION_MIN_SCORE
         self.minimum_alerts = settings.CORRELATION_MIN_ALERTS
+        self.allow_repeated_alerts = settings.CORRELATION_ALLOW_REPEATED_ALERTS
 
     def correlate_alert(self, db: Session, alert: Alert) -> CorrelationCandidate:
-        # Check for duplicates first
-        duplicate_check = self._check_duplicate(db, alert)
-        if duplicate_check:
-            return duplicate_check
-
+        query_started_at = perf_counter()
         observed_at = self._observed_at(alert)
-        recent_alerts = (
-            db.query(Alert)
+        window_start = observed_at - timedelta(minutes=self.window_minutes)
+        window_end = observed_at + timedelta(minutes=self.window_minutes)
+        observed_expression = func.coalesce(SecurityEvent.timestamp, Alert.created_at)
+
+        # Existing links are considered only for attaching to their current active
+        # incident. They can never seed a different incident.
+        active_query = (
+            db.query(Alert, Incident)
+            .join(IncidentAlert, IncidentAlert.alert_id == Alert.id)
+            .join(Incident, Incident.id == IncidentAlert.incident_id)
+            .outerjoin(SecurityEvent, SecurityEvent.id == Alert.event_id)
             .filter(
                 Alert.tenant_id == alert.tenant_id,
+                Incident.tenant_id == alert.tenant_id,
                 Alert.id != alert.id,
                 Alert.status != AlertStatus.DISMISSED,
+                Incident.status.in_((IncidentStatus.OPEN, IncidentStatus.INVESTIGATING)),
+                observed_expression >= window_start,
+                observed_expression <= window_end,
             )
-            .options(joinedload(Alert.incident))
-            .order_by(Alert.created_at.asc())
-            .limit(500)
-            .all()
+            .options(joinedload(Alert.event))
         )
 
         best_candidate: Optional[CorrelationCandidate] = None
-
-        for candidate_alert in recent_alerts:
-            if abs(self._observed_at(candidate_alert) - observed_at) > timedelta(minutes=self.window_minutes):
-                continue
-            score, reasons = self._pair_score(db, alert, candidate_alert)
-            if score < self.minimum_score:
-                continue
-
-            candidate_incident = candidate_alert.incident
-            if candidate_incident and candidate_incident.status not in (
-                IncidentStatus.OPEN,
-                IncidentStatus.INVESTIGATING,
-            ):
-                candidate_incident = None
-
-            if best_candidate is None or score > best_candidate.correlation_score:
-                grouped_alerts = [alert, candidate_alert]
-                if candidate_incident:
-                    for linked_alert in candidate_incident.alerts:
-                        if linked_alert.id not in {item.id for item in grouped_alerts}:
-                            grouped_alerts.append(linked_alert)
-                best_candidate = CorrelationCandidate(
+        evaluated_candidate_ids: list[str] = []
+        for active_rows in self._paged_candidates(active_query, observed_expression, tuple_rows=True):
+            evaluated_candidate_ids.extend(candidate_alert.id for candidate_alert, _ in active_rows)
+            for candidate_alert, candidate_incident in active_rows:
+                scored = self._qualified_pair(db, alert, candidate_alert)
+                if scored is None:
+                    continue
+                score, reasons, matched, kind = scored
+                grouped_alerts = [alert]
+                for link in sorted(candidate_incident.incident_alerts, key=lambda row: (row.sequence_order, row.alert_id)):
+                    if link.alert and link.alert.id not in {item.id for item in grouped_alerts}:
+                        grouped_alerts.append(link.alert)
+                proposed = CorrelationCandidate(
                     incident=candidate_incident,
                     alerts=grouped_alerts,
                     correlation_score=score,
                     correlation_reasons=reasons,
                     qualified=True,
-                    matched_identifiers=self._matched_identifier_names(alert, candidate_alert),
+                    matched_identifiers=matched,
+                    candidate_alert_ids=[item.id for item in grouped_alerts if item.id != alert.id],
+                    correlation_kind=kind,
                 )
+                if self._is_better_candidate(proposed, best_candidate, candidate_alert.id):
+                    best_candidate = proposed
+
+        # New incidents may use only pending, completely unassociated alerts.
+        linked_alert_exists = exists().where(IncidentAlert.alert_id == Alert.id)
+        pending_query = (
+            db.query(Alert)
+            .outerjoin(SecurityEvent, SecurityEvent.id == Alert.event_id)
+            .filter(
+                Alert.tenant_id == alert.tenant_id,
+                Alert.id != alert.id,
+                Alert.status != AlertStatus.DISMISSED,
+                Alert.incident_id.is_(None),
+                ~linked_alert_exists,
+                observed_expression >= window_start,
+                observed_expression <= window_end,
+            )
+            .options(joinedload(Alert.event), joinedload(Alert.detection_rule))
+        )
+        for pending_alerts in self._paged_candidates(pending_query, observed_expression):
+            evaluated_candidate_ids.extend(item.id for item in pending_alerts)
+            for candidate_alert in pending_alerts:
+                scored = self._qualified_pair(db, alert, candidate_alert)
+                if scored is None:
+                    continue
+                score, reasons, matched, kind = scored
+                proposed = CorrelationCandidate(
+                    incident=None,
+                    alerts=[alert, candidate_alert],
+                    correlation_score=score,
+                    correlation_reasons=reasons,
+                    qualified=True,
+                    matched_identifiers=matched,
+                    candidate_alert_ids=[candidate_alert.id],
+                    correlation_kind=kind,
+                )
+                if self._is_better_candidate(proposed, best_candidate, candidate_alert.id):
+                    best_candidate = proposed
 
         if best_candidate is None:
             default_reason = self._standalone_reason(alert)
@@ -93,45 +146,85 @@ class CorrelationService:
                 correlation_reasons=[default_reason],
                 qualified=False,
                 matched_identifiers=[],
+                candidate_alert_ids=list(dict.fromkeys(evaluated_candidate_ids)),
+                correlation_kind="pending",
+                evaluated_candidate_count=len(set(evaluated_candidate_ids)),
+                query_duration_ms=(perf_counter() - query_started_at) * 1000,
             )
 
+        best_candidate.evaluated_candidate_count = len(set(evaluated_candidate_ids))
+        best_candidate.query_duration_ms = (perf_counter() - query_started_at) * 1000
         best_candidate.alerts = sorted(
             {item.id: item for item in best_candidate.alerts}.values(),
-            key=lambda item: self._to_utc(item.created_at),
+            key=lambda item: (self._observed_at(item), item.id),
         )
         return best_candidate
 
-    def _check_duplicate(self, db: Session, alert: Alert) -> Optional[CorrelationCandidate]:
-        alert_fingerprint = self._generate_alert_fingerprint(alert)
-        window_start = self._to_utc(alert.created_at) - timedelta(minutes=self.DUPLICATE_WINDOW_MINUTES)
-        
-        duplicate_alert = (
-            db.query(Alert)
-            .filter(
-                Alert.tenant_id == alert.tenant_id,
-                Alert.id != alert.id,
-                Alert.created_at >= window_start,
+    def _paged_candidates(self, query: Any, observed_expression: Any, *, tuple_rows: bool = False):
+        """Keyset-page every eligible row in the bounded event-time window."""
+        cursor_time: datetime | None = None
+        cursor_id: str | None = None
+        while True:
+            page_query = query
+            if cursor_time is not None and cursor_id is not None:
+                page_query = page_query.filter(or_(
+                    observed_expression < cursor_time,
+                    and_(observed_expression == cursor_time, Alert.id < cursor_id),
+                ))
+            rows = (
+                page_query.order_by(observed_expression.desc(), Alert.id.desc())
+                .limit(self.CANDIDATE_PAGE_SIZE)
+                .all()
             )
-            .options(joinedload(Alert.incident))
-            .limit(500)
-            .all()
-        )
+            if not rows:
+                return
+            yield rows
+            last_alert = rows[-1][0] if tuple_rows else rows[-1]
+            cursor_time = self._observed_at(last_alert)
+            cursor_id = last_alert.id
+            if len(rows) < self.CANDIDATE_PAGE_SIZE:
+                return
 
-        for candidate in duplicate_alert:
-            candidate_fingerprint = self._generate_alert_fingerprint(candidate)
-            if alert_fingerprint == candidate_fingerprint:
-                candidate_incident = candidate.incident
-                return CorrelationCandidate(
-                    incident=candidate_incident,
-                    alerts=[alert, candidate],
-                    correlation_score=100,
-                    correlation_reasons=["Duplicate alert detected - same event fingerprint"],
-                    is_duplicate=True,
-                    duplicate_of=candidate.id,
-                    qualified=bool(candidate_incident),
-                    matched_identifiers=["duplicate_fingerprint"],
-                )
+    def _qualified_pair(
+        self, db: Session, alert: Alert, candidate: Alert
+    ) -> tuple[float, list[str], list[str], str] | None:
+        if alert.event_id and alert.event_id == candidate.event_id:
+            return None
+        score, reasons = self._pair_score(db, alert, candidate)
+        matched = self._matched_identifier_names(alert, candidate)
+        strong_identifiers = {
+            "hostname", "agent_id", "source_ip", "destination_ip", "source_host",
+            "destination_host", "source_user", "destination_user",
+        }
+        has_strong_identity = bool(strong_identifiers.intersection(matched))
+        has_progression = self._check_attack_chain(db, alert, candidate) > 0
+        behavior_reason = self._behavior_sequence_reason(alert, candidate)
+        repeated = self._is_repeated_activity(alert, candidate)
+        if repeated and not self.allow_repeated_alerts:
+            return None
+        if score < self.minimum_score or not has_strong_identity:
+            return None
+        if has_progression:
+            return score, reasons, matched, "attack_chain"
+        if behavior_reason:
+            return score, reasons + [behavior_reason], matched, "behavior_sequence"
+        if repeated and self.allow_repeated_alerts:
+            return score, reasons + ["Repeated-alert policy allowed related repeated activity"], matched, "repeated_activity"
         return None
+
+    def _is_better_candidate(
+        self, proposed: CorrelationCandidate, current: CorrelationCandidate | None, tie_breaker: str
+    ) -> bool:
+        if current is None or proposed.correlation_score > current.correlation_score:
+            return True
+        if proposed.correlation_score < current.correlation_score:
+            return False
+        if proposed.incident is not None and current.incident is None:
+            return True
+        if proposed.incident is None and current.incident is not None:
+            return False
+        current_id = min(current.candidate_alert_ids or [""])
+        return tie_breaker > current_id
 
     def _generate_alert_fingerprint(self, alert: Alert) -> str:
         raw = alert.raw_data or {}
@@ -209,15 +302,6 @@ class CorrelationService:
         # Check for MITRE ATT&CK technique progression
         alert_techniques = self._extract_mitre_techniques(alert)
         candidate_techniques = self._extract_mitre_techniques(candidate)
-        
-        if not alert_techniques or not candidate_techniques:
-            return 0
-
-        technique_ids = set(alert_techniques + candidate_techniques)
-        technique_tactics = {
-            technique.technique_id: technique.tactic.value
-            for technique in db.query(MitreTechnique).filter(MitreTechnique.technique_id.in_(technique_ids)).all()
-        }
         tactic_order = [
             "Reconnaissance",
             "Resource Development",
@@ -235,6 +319,22 @@ class CorrelationService:
             "Impact",
         ]
 
+        direct_alert_tactics = self._identifiers(alert)["tactics"]
+        direct_candidate_tactics = self._identifiers(candidate)["tactics"]
+        direct_score = self._distinct_tactic_score(
+            direct_alert_tactics, direct_candidate_tactics, alert, candidate, tactic_order
+        )
+        if direct_score:
+            return direct_score
+        if not alert_techniques or not candidate_techniques:
+            return 0
+
+        technique_ids = set(alert_techniques + candidate_techniques)
+        technique_tactics = {
+            technique.technique_id: technique.tactic.value
+            for technique in db.query(MitreTechnique).filter(MitreTechnique.technique_id.in_(technique_ids)).all()
+        }
+
         for a_tech in alert_techniques:
             for c_tech in candidate_techniques:
                 a_tactic = technique_tactics.get(a_tech)
@@ -244,10 +344,32 @@ class CorrelationService:
                     a_index = tactic_order.index(a_tactic)
                     c_index = tactic_order.index(c_tactic)
                     
-                    # If tactics are sequential and in order
-                    if abs(a_index - c_index) == 1:
-                        return 20
+                    if a_index == c_index:
+                        continue
+                    return self._distinct_tactic_score([a_tactic], [c_tactic], alert, candidate, tactic_order)
         
+        return 0
+
+    def _distinct_tactic_score(
+        self,
+        alert_tactics: Sequence[str],
+        candidate_tactics: Sequence[str],
+        alert: Alert,
+        candidate: Alert,
+        tactic_order: Sequence[str],
+    ) -> float:
+        for alert_tactic in alert_tactics:
+            for candidate_tactic in candidate_tactics:
+                if alert_tactic == candidate_tactic or alert_tactic not in tactic_order or candidate_tactic not in tactic_order:
+                    continue
+                alert_index = tactic_order.index(alert_tactic)
+                candidate_index = tactic_order.index(candidate_tactic)
+                tactics_follow_time = (
+                    alert_index > candidate_index and self._observed_at(alert) >= self._observed_at(candidate)
+                ) or (
+                    candidate_index > alert_index and self._observed_at(candidate) >= self._observed_at(alert)
+                )
+                return 20 if tactics_follow_time else 12
         return 0
 
     def _extract_mitre_techniques(self, alert: Alert) -> list[str]:
@@ -405,6 +527,49 @@ class CorrelationService:
         )
         has_success = any(activity == "login" or event_type == "login" for activity, event_type in zip(activities, event_types))
         return has_failed and has_success
+
+    def _is_repeated_activity(self, alert: Alert, candidate: Alert) -> bool:
+        left = self._identifiers(alert)
+        right = self._identifiers(candidate)
+        alert_raw = alert.raw_data or {}
+        candidate_raw = candidate.raw_data or {}
+        return (
+            alert.detection_rule_id == candidate.detection_rule_id
+            and set(left["technique_ids"]) == set(right["technique_ids"])
+            and set(left["tactics"]) == set(right["tactics"])
+            and alert_raw.get("event_type") == candidate_raw.get("event_type")
+            and alert_raw.get("file_hash") == candidate_raw.get("file_hash")
+            and alert_raw.get("destination_ip") == candidate_raw.get("destination_ip")
+            and any(
+                left.get(field) is not None and left.get(field) == right.get(field)
+                for field in ("hostname", "agent_id", "source_ip", "destination_ip", "source_user")
+            )
+        )
+
+    def _behavior_sequence_reason(self, alert: Alert, candidate: Alert) -> str | None:
+        if self._is_account_takeover_pattern(alert, candidate):
+            return "Correlated as a deterministic failed-login/successful-login sequence"
+        alert_raw = alert.raw_data or {}
+        candidate_raw = candidate.raw_data or {}
+        alert_type = str(alert_raw.get("event_type") or "").lower()
+        candidate_type = str(candidate_raw.get("event_type") or "").lower()
+        if (
+            alert_type == candidate_type == "malware_detection"
+            and alert_raw.get("malware_name")
+            and alert_raw.get("malware_name") == candidate_raw.get("malware_name")
+            and alert_raw.get("file_hash")
+            and candidate_raw.get("file_hash")
+            and alert_raw.get("file_hash") != candidate_raw.get("file_hash")
+        ):
+            return "Correlated as multiple distinct artifacts from the same malware family"
+        network_types = {alert_type, candidate_type}
+        if (
+            len(network_types) == 2
+            and "suspicious_network" in network_types
+            and network_types.intersection({"connection", "network_connection"})
+        ):
+            return "Correlated as suspicious network activity followed by a related connection"
+        return None
 
     def _standalone_reason(self, alert: Alert) -> str:
         class_name = str((alert.ocsf_data or {}).get("class_name", "Security"))

@@ -495,8 +495,11 @@ export interface IncidentMitreMapping {
   tactic: string
   technique_id: string
   technique_name: string
+  parent_technique_id: string
+  parent_technique_name: string
   sub_technique_id?: string | null
   sub_technique_name?: string | null
+  mapping_source: 'correlated' | 'legacy-derived' | string
   confidence: number
   confidence_reasons: string[]
   supporting_evidence: Array<Record<string, any>>
@@ -510,11 +513,15 @@ export interface MitreMatrixTechnique {
   tactic: string
   technique_id: string
   technique_name: string
+  parent_technique_id: string
+  parent_technique_name: string
   sub_technique_id?: string | null
   sub_technique_name?: string | null
+  mapping_source: 'correlated' | 'legacy-derived' | string
   attack_stage_order: number
   incident_count: number
-  incidents: Array<{ id: string; title: string; severity: string; status: string; confidence: number; first_seen_at?: string; last_seen_at?: string }>
+  supporting_alert_count: number
+  incidents: Array<{ id: string; title: string; severity: string; status: string; confidence: number; supporting_alert_count: number; mapping_source: string; first_seen_at?: string; last_seen_at?: string }>
 }
 
 export interface MitreMatrixResponse {

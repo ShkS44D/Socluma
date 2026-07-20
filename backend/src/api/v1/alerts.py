@@ -29,7 +29,7 @@ from src.utils.datetime_utils import get_utc_now
 from src.core.logging import logger
 from src.workers.tasks import process_alert_for_incident
 from src.core.config import get_settings
-from src.services.incident_service import incident_service
+from src.services.incident_service import AlertOwnershipConflict, incident_service
 from src.services.audit_service import audit_service
 from src.core.security import verify_api_key
 from src.services.source_service import source_service
@@ -369,7 +369,14 @@ def create_incident_from_alert(
             detail="Alert already has an incident"
         )
     
-    incident = incident_service.process_alert(db, alert)
+    try:
+        incident = incident_service.process_alert(db, alert)
+    except AlertOwnershipConflict as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Alert ownership is inconsistent; correlation was safely rejected",
+        ) from exc
     if incident is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

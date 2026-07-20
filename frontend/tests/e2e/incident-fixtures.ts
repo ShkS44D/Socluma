@@ -7,6 +7,31 @@ export const RULE_ID = '44444444-4444-4444-8444-444444444444'
 export const TENANT_ID = '55555555-5555-4555-8555-555555555555'
 const NOW = '2026-07-16T08:00:00Z'
 
+export const correlatedMitreMappings = [{
+  tactic: 'Execution',
+  technique_id: 'T1059.001',
+  technique_name: 'PowerShell',
+  parent_technique_id: 'T1059',
+  parent_technique_name: 'Command and Scripting Interpreter',
+  sub_technique_id: 'T1059.001',
+  sub_technique_name: 'PowerShell',
+  mapping_source: 'correlated',
+  confidence: 86,
+  confidence_reasons: ['Correlation strength: 80/100', 'Matched identifiers: hostname, agent_id'],
+  supporting_evidence: [{
+    alert_id: ALERT_ID,
+    event_id: EVENT_ID,
+    rule_id: RULE_ID,
+    why_matched: 'PowerShell process matched the rule.',
+    observed_at: NOW,
+    evidence_fields: { hostname: 'controlled-host', agent_id: 'controlled-agent' },
+  }],
+  source_alert_ids: [ALERT_ID],
+  stage_order: 0,
+  first_seen_at: NOW,
+  last_seen_at: NOW,
+}]
+
 const alertLink = (index = 0) => ({
   id: `60000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
   alert_id: index === 0 ? ALERT_ID : `70000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
@@ -85,6 +110,7 @@ export const incidentDetail = (overrides: Record<string, unknown> = {}) => ({
   related_alert_page: 1,
   related_alert_page_size: 20,
   related_alert_has_more: false,
+  mitre_mappings: correlatedMitreMappings,
   ...overrides,
 })
 
@@ -189,4 +215,3 @@ export const installIncidentRoutes = async (
 }
 
 export const manyAlertFixture = (count: number, offset = 0) => Array.from({ length: count }, (_, index) => alertLink(index + offset))
-

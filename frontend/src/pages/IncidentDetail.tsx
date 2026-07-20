@@ -450,14 +450,70 @@ const IncidentDetail: React.FC = () => {
         {incident.mitre_mappings.length === 0 ? (
           <Typography color="text.secondary">No evidence-backed MITRE mappings are available for this incident.</Typography>
         ) : (
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ overflowX: 'auto' }}>
+          <Stack spacing={2}>
             {incident.mitre_mappings.map((mapping) => (
-              <Paper key={mapping.technique_id} variant="outlined" sx={{ p: 2, minWidth: 240 }}>
-                <Typography variant="overline">Stage {mapping.stage_order + 1}: {mapping.tactic}</Typography>
-                <Typography variant="subtitle1">{mapping.sub_technique_id || mapping.technique_id} - {mapping.sub_technique_name || mapping.technique_name}</Typography>
-                <Chip size="small" label={`${mapping.confidence.toFixed(0)}% confidence`} sx={{ my: 1 }} />
-                <Typography variant="body2" color="text.secondary">{mapping.source_alert_ids.length} supporting alert(s)</Typography>
-                {mapping.confidence_reasons.slice(0, 2).map((reason) => <Typography key={reason} variant="caption" display="block">{reason}</Typography>)}
+              <Paper key={`${mapping.technique_id}-${mapping.mapping_source}`} variant="outlined" sx={{ p: 2 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1}>
+                  <Box>
+                    <Typography variant="overline">Stage {mapping.stage_order + 1}: {mapping.tactic}</Typography>
+                    <Typography variant="subtitle1">
+                      Parent technique: {mapping.parent_technique_id} {mapping.parent_technique_name}
+                    </Typography>
+                    <Typography variant="body2">
+                      {mapping.sub_technique_id
+                        ? `Sub-technique: ${mapping.sub_technique_id} ${mapping.sub_technique_name || 'Name unavailable'}`
+                        : 'Sub-technique: None'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Mapped technique ID: {mapping.technique_id}</Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                    <Chip size="small" label={`${mapping.confidence.toFixed(0)}% confidence`} />
+                    <Chip
+                      size="small"
+                      color={mapping.mapping_source === 'correlated' ? 'primary' : 'default'}
+                      label={mapping.mapping_source === 'correlated' ? 'Correlated evidence' : 'Historical metadata'}
+                    />
+                  </Stack>
+                </Stack>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  First seen: {mapping.first_seen_at ? new Date(mapping.first_seen_at).toLocaleString() : 'Unavailable'}
+                </Typography>
+                <Typography variant="body2">
+                  Last seen: {mapping.last_seen_at ? new Date(mapping.last_seen_at).toLocaleString() : 'Unavailable'}
+                </Typography>
+                <Typography variant="subtitle2" sx={{ mt: 2 }}>Confidence reasons</Typography>
+                {mapping.confidence_reasons.length
+                  ? mapping.confidence_reasons.map((reason) => <Typography key={reason} variant="body2">• {reason}</Typography>)
+                  : <Typography variant="body2" color="text.secondary">No confidence explanation was recorded.</Typography>}
+                <Typography variant="subtitle2" sx={{ mt: 2 }}>Supporting source alerts</Typography>
+                {mapping.source_alert_ids.length ? (
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    {mapping.source_alert_ids.map((alertId) => <Chip key={alertId} size="small" label={alertId} />)}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Historical legacy-derived metadata; verified supporting alert evidence was not recorded.
+                  </Typography>
+                )}
+                <Typography variant="subtitle2" sx={{ mt: 2 }}>Stored evidence</Typography>
+                {mapping.supporting_evidence.length ? (
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {mapping.supporting_evidence.map((evidence, index) => (
+                      <Paper key={`${String(evidence.alert_id || index)}-${index}`} variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+                        <Typography variant="body2">Alert: {String(evidence.alert_id || 'Unavailable')}</Typography>
+                        <Typography variant="caption" display="block">Event: {String(evidence.event_id || 'Unavailable')}</Typography>
+                        <Typography variant="caption" display="block">Rule: {String(evidence.rule_id || 'Unavailable')}</Typography>
+                        <Typography variant="caption" display="block">Observed: {evidence.observed_at ? new Date(String(evidence.observed_at)).toLocaleString() : 'Unavailable'}</Typography>
+                        <Typography variant="caption" display="block">Match evidence: {String(evidence.why_matched || 'Not recorded')}</Typography>
+                        {Object.entries((evidence.evidence_fields as Record<string, unknown>) || {}).map(([field, value]) => (
+                          <Typography key={field} variant="caption" display="block">{field.replace(/_/g, ' ')}: {String(value)}</Typography>
+                        ))}
+                      </Paper>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No verified evidence fields are stored for this mapping.</Typography>
+                )}
               </Paper>
             ))}
           </Stack>

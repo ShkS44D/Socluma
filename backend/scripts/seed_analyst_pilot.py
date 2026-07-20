@@ -19,18 +19,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.api.openapi_examples import SOC_SIMULATION_SCENARIOS
 from src.core.config import get_settings
 from src.core.database import SessionLocal
-from src.models.pydantic import IncidentEvidenceCreate, InvestigationNoteCreate, SecurityEventCreate
+from src.models.pydantic import (
+    IncidentEvidenceCreate,
+    InvestigationNoteCreate,
+    MitreTechniqueCreate,
+    SecurityEventCreate,
+)
 from src.models.sqlalchemy import (
     EvidenceType,
     Incident,
     IncidentStatus,
     InvestigationNote,
+    MitreTactic,
+    MitreTechnique,
     Severity,
     User,
 )
 from src.services.detection_engine import detection_engine
 from src.services.incident_service import incident_service
+from src.services.mitre_technique_service import mitre_technique_service
 from src.services.security_event_service import security_event_service
+from src.services.threat_intel_service import threat_intel_service
 
 
 SCENARIOS = (
@@ -39,7 +48,6 @@ SCENARIOS = (
     ("High-risk incident", "brute_force_attack"),
     ("Prompt-injection resilience incident", "c2_beacon"),
 )
-
 
 def _title(name: str) -> str:
     return f"[PILOT] {name}"
@@ -65,11 +73,20 @@ def _create_detection_scenario(db, user: User, name: str, simulation: str) -> In
     incident_ids: list[str] = []
     payloads = deepcopy(SOC_SIMULATION_SCENARIOS[simulation]["events"])
     if len(payloads) == 1:
-        follow_up = deepcopy(payloads[0])
-        follow_up.setdefault("raw_event", {})["pilot_follow_up"] = True
-        follow_up.setdefault("normalized_event", {})["pilot_follow_up"] = True
-        payloads.append(follow_up)
+        authentication = deepcopy(SOC_SIMULATION_SCENARIOS["brute_force_attack"]["events"][0])
+        network = deepcopy(SOC_SIMULATION_SCENARIOS["c2_beacon"]["events"][0])
+        if simulation == "powershell_attack":
+            payloads = [authentication, network]
+        elif simulation == "brute_force_attack":
+            payloads.append(network)
+        else:
+            payloads.insert(0, authentication)
     marker = name.lower().replace(" ", "-")
+    host = f"pilot-{marker}-host"
+    agent_id = f"pilot-{marker}-agent"
+    for payload in payloads:
+        payload.setdefault("raw_event", {}).update({"hostname": host, "agent_id": agent_id})
+        payload.setdefault("normalized_event", {}).update({"hostname": host, "agent_id": agent_id})
     for index, payload in enumerate(payloads):
         payload["source"] = f"pilot-{marker}"
         payload.setdefault("normalized_event", {})["pilot_scenario"] = marker
@@ -131,6 +148,25 @@ ALL_SCENARIO_NAMES = tuple(name for name, _ in SCENARIOS) + (
 settings = get_settings()
 
 
+def _ensure_pilot_mitre_metadata(db) -> None:
+    required = (
+        ("T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS),
+        ("T1071", "Application Layer Protocol", MitreTactic.COMMAND_AND_CONTROL),
+    )
+    for technique_id, name, tactic in required:
+        if db.query(MitreTechnique).filter(MitreTechnique.technique_id == technique_id).first():
+            continue
+        mitre_technique_service.create_technique(
+            db,
+            MitreTechniqueCreate(
+                technique_id=technique_id,
+                name=name,
+                tactic=tactic,
+                description="Synthetic pilot reference metadata for an existing ATT&CK technique.",
+            ),
+        )
+
+
 def _pilot_user(db) -> User:
     """Resolve one configured user's tenant; never seed across tenant boundaries."""
     query = db.query(User).filter(User.is_active.is_(True))
@@ -155,11 +191,14 @@ def dry_run() -> tuple[int, int]:
 def seed() -> list[Incident]:
     db = SessionLocal()
     original_ai_analysis = incident_service._run_ai_analysis
+    original_threat_lookup = threat_intel_service.lookup_incident_indicators
     try:
         # Fixture creation must never consume paid AI credits. Copilot is tested
         # separately through its normal endpoint during the controlled smoke test.
         incident_service._run_ai_analysis = lambda *_args, **_kwargs: None
+        threat_intel_service.lookup_incident_indicators = lambda *_args, **_kwargs: []
         user = _pilot_user(db)
+        _ensure_pilot_mitre_metadata(db)
 
         incidents = [_create_detection_scenario(db, user, name, simulation) for name, simulation in SCENARIOS]
         injection = incidents[-1]
@@ -201,6 +240,7 @@ def seed() -> list[Incident]:
         return incidents
     finally:
         incident_service._run_ai_analysis = original_ai_analysis
+        threat_intel_service.lookup_incident_indicators = original_threat_lookup
         db.close()
 
 

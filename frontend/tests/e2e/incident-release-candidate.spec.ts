@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { assertStablePage, login, monitorRuntime } from './helpers'
 import {
   ALERT_ID,
+  correlatedMitreMappings,
   EVENT_ID,
   INCIDENT_ID,
   incidentDetail,
@@ -41,7 +42,16 @@ test.describe('Incident intelligence release-candidate variants', () => {
     const assertNoFailures = monitorRuntime(page)
     await login(page)
     await installIncidentRoutes(page, {
-      detail: incidentDetail({ provenance_status: 'legacy_derived' }),
+      detail: incidentDetail({
+        provenance_status: 'legacy_derived',
+        mitre_mappings: correlatedMitreMappings.map((mapping) => ({
+          ...mapping,
+          mapping_source: 'legacy-derived',
+          confidence_reasons: [],
+          supporting_evidence: [],
+          source_alert_ids: [],
+        })),
+      }),
       explanation: incidentExplanation({
         origin: { creation_source: 'detection_engine', provenance_status: 'legacy_derived', derived_fields: ['primary_alert'], creation_reason: 'Historical correlation details are unavailable.', created_at: '2026-07-16T08:00:00Z', first_seen_at: '2026-07-16T08:00:00Z', last_seen_at: '2026-07-16T08:00:00Z', status_reason: null },
         correlation: { rule_id: null, rule_name: 'Unavailable', key: null, score: 0, window_start: null, window_end: null, reasons: [] },
@@ -51,6 +61,8 @@ test.describe('Incident intelligence release-candidate variants', () => {
     await openFixture(page)
     await expect(page.getByText(/Legacy incident: derived fields are labelled/i)).toBeVisible()
     await expect(page.getByText('Unavailable', { exact: true })).toBeVisible()
+    await expect(page.getByText('Historical metadata')).toBeVisible()
+    await expect(page.getByText(/verified supporting alert evidence was not recorded/i)).toBeVisible()
     assertNoFailures()
   })
 
@@ -96,12 +108,27 @@ test.describe('Incident intelligence release-candidate variants', () => {
     const assertNoFailures = monitorRuntime(page)
     await login(page)
     await installIncidentRoutes(page, {
-      detail: incidentDetail({ attack_technique: null }),
+      detail: incidentDetail({ attack_technique: null, mitre_mappings: [] }),
       explanation: incidentExplanation({ mitre_attack_mapping: [], detection_matches: [{ alert_id: ALERT_ID, event_id: EVENT_ID, rule_id: null, rule_name: 'Unmapped rule', mitre_technique_id: null, matched_condition: 'controlled', why_matched: 'controlled', severity: 'high' }] }),
     })
     await openFixture(page)
     await expect(page.getByText(/MITRE:/)).toHaveCount(0)
     await expect(page.getByText(/Primary: Controlled PowerShell Rule/)).toBeVisible()
+    assertNoFailures()
+  })
+
+  test('correlated MITRE mapping renders parent, sub-technique, confidence, and stored evidence', async ({ page }) => {
+    const assertNoFailures = monitorRuntime(page)
+    await login(page)
+    await installIncidentRoutes(page)
+    await openFixture(page)
+    await expect(page.getByText('Stage 1: Execution')).toBeVisible()
+    await expect(page.getByText('Parent technique: T1059 Command and Scripting Interpreter')).toBeVisible()
+    await expect(page.getByText('Sub-technique: T1059.001 PowerShell')).toBeVisible()
+    await expect(page.getByText('86% confidence')).toBeVisible()
+    await expect(page.getByText('Correlation strength: 80/100')).toBeVisible()
+    await expect(page.getByText(`Alert: ${ALERT_ID}`)).toBeVisible()
+    await expect(page.getByText('hostname: controlled-host')).toBeVisible()
     assertNoFailures()
   })
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import asc, case, desc, func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from src.core.logging import logger
@@ -55,6 +56,10 @@ from src.core.observability import INCIDENTS_CREATED
 from src.utils.datetime_utils import utc_isoformat
 
 
+class AlertOwnershipConflict(RuntimeError):
+    """Raised when direct and association-table incident ownership disagree."""
+
+
 class IncidentService:
     _ALLOWED_STATUS_TRANSITIONS: dict[IncidentStatus, tuple[IncidentStatus, ...]] = {
         IncidentStatus.OPEN: (IncidentStatus.INVESTIGATING,),
@@ -66,19 +71,45 @@ class IncidentService:
     def process_alert(self, db: Session, alert: Alert) -> Incident | None:
         if db.get_bind().dialect.name == "postgresql":
             db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:scope))"), {"scope": f"incident-correlation:{alert.tenant_id}"})
-        alert = db.query(Alert).filter(Alert.id == alert.id, Alert.tenant_id == alert.tenant_id).with_for_update().one()
-        if alert.incident_id:
-            return db.query(Incident).filter(Incident.id == alert.incident_id, Incident.tenant_id == alert.tenant_id).first()
+            logger.info(
+                "Tenant correlation lock acquired",
+                extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "decision": "lock_acquired", "lock_scope": "tenant"},
+            )
+        alert = db.query(Alert).filter(
+            Alert.id == alert.id,
+            Alert.tenant_id == alert.tenant_id,
+        ).populate_existing().with_for_update().one()
+        owned_incident = self._validate_existing_alert_ownership(db, alert)
+        if owned_incident:
+            logger.info(
+                "Alert processing replayed idempotently",
+                extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": owned_incident.id,
+                       "decision": "idempotent_replay", "rejection_reason": None},
+            )
+            return owned_incident
         candidate = correlation_service.correlate_alert(db, alert)
         if not candidate.qualified or len({item.id for item in candidate.alerts}) < correlation_service.minimum_alerts:
             logger.info(
                 "Alert retained pending correlation",
                 extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": None,
+                       "candidate_alert_ids": candidate.candidate_alert_ids or [],
+                       "evaluated_candidate_count": candidate.evaluated_candidate_count,
+                       "candidate_query_duration_ms": round(candidate.query_duration_ms, 3),
                        "correlation_score": candidate.correlation_score, "matched_identifiers": candidate.matched_identifiers or [],
-                       "correlation_window": correlation_service.window_minutes, "decision": "pending"},
+                       "correlation_window": correlation_service.window_minutes, "decision": "pending",
+                       "rejection_reason": "; ".join(candidate.correlation_reasons)},
             )
             db.commit()
             return None
+        locked_alerts = db.query(Alert).filter(
+            Alert.tenant_id == alert.tenant_id,
+            Alert.id.in_(sorted({item.id for item in candidate.alerts})),
+        ).order_by(Alert.id).populate_existing().with_for_update().all()
+        if len(locked_alerts) != len({item.id for item in candidate.alerts}):
+            self._reject_ownership(alert, candidate, "candidate alert disappeared or crossed tenant scope")
+        for candidate_alert in locked_alerts:
+            self._validate_candidate_ownership(db, candidate_alert, candidate.incident)
+        candidate.alerts = sorted(locked_alerts, key=lambda item: (correlation_service._observed_at(item), item.id))
         title, description = correlation_service.derive_incident_metadata(candidate.alerts)
         threat_intel_results = threat_intel_service.lookup_incident_indicators(db, candidate.alerts)
         risk = risk_service.calculate_risk(
@@ -90,39 +121,102 @@ class IncidentService:
             threat_intel_results=threat_intel_results,
         )
 
-        if candidate.incident:
-            incident = self._update_existing_incident(
-                db=db,
-                incident=candidate.incident,
-                alerts=candidate.alerts,
-                title=title,
-                description=description,
-                candidate=candidate,
-                risk=risk,
-                threat_intel_results=threat_intel_results,
-                triggering_alert_id=alert.id,
-            )
-        else:
-            incident = self._create_incident(
-                db=db,
-                tenant_id=alert.tenant_id,
-                alerts=candidate.alerts,
-                title=title,
-                description=description,
-                candidate=candidate,
-                risk=risk,
-                threat_intel_results=threat_intel_results,
-                triggering_alert_id=alert.id,
-            )
+        try:
+            if candidate.incident:
+                incident = self._update_existing_incident(
+                    db=db,
+                    incident=candidate.incident,
+                    alerts=candidate.alerts,
+                    title=title,
+                    description=description,
+                    candidate=candidate,
+                    risk=risk,
+                    threat_intel_results=threat_intel_results,
+                    triggering_alert_id=alert.id,
+                )
+            else:
+                incident = self._create_incident(
+                    db=db,
+                    tenant_id=alert.tenant_id,
+                    alerts=candidate.alerts,
+                    title=title,
+                    description=description,
+                    candidate=candidate,
+                    risk=risk,
+                    threat_intel_results=threat_intel_results,
+                    triggering_alert_id=alert.id,
+                )
+        except IntegrityError as exc:
+            db.rollback()
+            replay_alert = db.query(Alert).filter(
+                Alert.id == alert.id,
+                Alert.tenant_id == alert.tenant_id,
+            ).populate_existing().one()
+            replay_incident = self._validate_existing_alert_ownership(db, replay_alert)
+            if replay_incident:
+                logger.info(
+                    "Correlation uniqueness race resolved as idempotent replay",
+                    extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": replay_incident.id,
+                           "candidate_alert_ids": candidate.candidate_alert_ids or [], "decision": "race_replay",
+                           "lock_retry_info": "unique constraint won by another transaction"},
+                )
+                return replay_incident
+            self._reject_ownership(alert, candidate, "database uniqueness conflict", cause=exc)
 
         logger.info(
             "Correlation decision completed",
             extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": incident.id,
+                   "candidate_alert_ids": candidate.candidate_alert_ids or [],
+                   "evaluated_candidate_count": candidate.evaluated_candidate_count,
+                   "candidate_query_duration_ms": round(candidate.query_duration_ms, 3),
                    "correlation_score": candidate.correlation_score, "matched_identifiers": candidate.matched_identifiers or [],
                    "correlation_window": correlation_service.window_minutes,
-                   "decision": "updated" if candidate.incident else "created"},
+                   "decision": "updated" if candidate.incident else "created",
+                   "correlation_kind": candidate.correlation_kind,
+                   "correlation_reasons": candidate.correlation_reasons},
         )
         return incident
+
+    def _validate_existing_alert_ownership(self, db: Session, alert: Alert) -> Incident | None:
+        links = db.query(IncidentAlert).filter(IncidentAlert.alert_id == alert.id).all()
+        if len(links) > 1:
+            self._reject_ownership(alert, None, "alert is linked to multiple incidents")
+        if not links and not alert.incident_id:
+            return None
+        if not links or not alert.incident_id or links[0].incident_id != alert.incident_id:
+            self._reject_ownership(alert, None, "alerts.incident_id and incident_alerts disagree")
+        incident = db.query(Incident).filter(
+            Incident.id == links[0].incident_id,
+            Incident.tenant_id == alert.tenant_id,
+        ).first()
+        if incident is None:
+            self._reject_ownership(alert, None, "owned incident is missing or outside tenant scope")
+        return incident
+
+    def _validate_candidate_ownership(
+        self, db: Session, alert: Alert, target_incident: Incident | None
+    ) -> None:
+        links = db.query(IncidentAlert).filter(IncidentAlert.alert_id == alert.id).all()
+        target_id = target_incident.id if target_incident else None
+        if links:
+            if len(links) != 1 or links[0].incident_id != target_id or alert.incident_id != target_id:
+                self._reject_ownership(alert, None, "candidate alert is already owned by another or inconsistent incident")
+        elif alert.incident_id is not None:
+            self._reject_ownership(alert, None, "candidate has direct ownership without an association row")
+
+    def _reject_ownership(
+        self, alert: Alert, candidate: CorrelationCandidate | None, reason: str, cause: Exception | None = None
+    ) -> None:
+        logger.error(
+            "Alert ownership conflict rejected",
+            extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": alert.incident_id,
+                   "candidate_alert_ids": (candidate.candidate_alert_ids if candidate else []) or [],
+                   "correlation_score": candidate.correlation_score if candidate else None,
+                   "matched_identifiers": (candidate.matched_identifiers if candidate else []) or [],
+                   "correlation_window": correlation_service.window_minutes, "decision": "rejected",
+                   "rejection_reason": reason},
+        )
+        raise AlertOwnershipConflict(reason) from cause
 
     def list_incidents(
         self,
@@ -744,21 +838,27 @@ class IncidentService:
             query = query.filter(Incident.status == status)
         if incident_id:
             query = query.filter(Incident.id == incident_id)
-        grouped: dict[tuple[str, str], dict[str, Any]] = {}
+        grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
         for mapping, incident in query.order_by(IncidentMitreMapping.stage_order, IncidentMitreMapping.technique_id).all():
-            key = (mapping.tactic, mapping.technique_id)
+            key = (mapping.tactic, mapping.technique_id, mapping.mapping_source)
             item = grouped.setdefault(key, {
                 "tactic": mapping.tactic, "technique_id": mapping.technique_id,
                 "technique_name": mapping.technique_name, "sub_technique_id": mapping.sub_technique_id,
+                "parent_technique_id": mapping.parent_technique_id,
+                "parent_technique_name": mapping.parent_technique_name,
                 "sub_technique_name": mapping.sub_technique_name, "attack_stage_order": mapping.stage_order,
-                "incident_count": 0, "incidents": [],
+                "mapping_source": mapping.mapping_source,
+                "incident_count": 0, "supporting_alert_count": 0, "incidents": [],
             })
             item["incident_count"] += 1
+            item["supporting_alert_count"] += len(set(mapping.source_alert_ids or []))
             item["incidents"].append({
                 "id": incident.id, "title": incident.title,
                 "severity": incident.severity.value if hasattr(incident.severity, "value") else str(incident.severity),
                 "status": incident.status.value if hasattr(incident.status, "value") else str(incident.status),
                 "confidence": mapping.confidence,
+                "supporting_alert_count": len(set(mapping.source_alert_ids or [])),
+                "mapping_source": mapping.mapping_source,
                 "first_seen_at": mapping.first_seen_at, "last_seen_at": mapping.last_seen_at,
             })
         return {"techniques": list(grouped.values()), "incident_count": len({row["id"] for item in grouped.values() for row in item["incidents"]})}
@@ -950,9 +1050,15 @@ class IncidentService:
         alerts: Sequence[Alert],
         candidate: CorrelationCandidate,
     ) -> None:
+        alert_ids = {item.id for item in alerts}
+        all_links = db.query(IncidentAlert).filter(IncidentAlert.alert_id.in_(alert_ids)).all()
+        conflicting = [item for item in all_links if item.incident_id != incident.id]
+        if conflicting:
+            conflicting_alert = next(item for item in alerts if item.id == conflicting[0].alert_id)
+            self._reject_ownership(conflicting_alert, candidate, "association already belongs to a different incident")
         existing_links = {
             item.alert_id: item
-            for item in db.query(IncidentAlert).filter(IncidentAlert.incident_id == incident.id).all()
+            for item in all_links if item.incident_id == incident.id
         }
         link_reason = "; ".join(candidate.correlation_reasons)
 
@@ -960,6 +1066,10 @@ class IncidentService:
         primary_id = ordered_alerts[0].id if ordered_alerts else None
         primary_time = correlation_service._observed_at(ordered_alerts[0]) if ordered_alerts else None
         for sequence, alert in enumerate(ordered_alerts):
+            if alert.incident_id is not None and alert.incident_id != incident.id:
+                self._reject_ownership(alert, candidate, "direct incident ownership belongs to a different incident")
+            if alert.incident_id == incident.id and alert.id not in existing_links:
+                self._reject_ownership(alert, candidate, "direct ownership exists without matching association")
             alert.incident_id = incident.id
             alert.risk_score = incident.risk_score
             db.add(alert)
@@ -981,8 +1091,9 @@ class IncidentService:
                 link = existing_links[alert.id]
                 link.sequence_order = sequence
                 link.is_primary = alert.id == primary_id
-                link.correlation_score = float(candidate.correlation_score or 0)
-                link.correlation_reason = link_reason
+                link.time_delta_seconds = abs(
+                    (correlation_service._observed_at(alert) - primary_time).total_seconds()
+                ) if primary_time else 0
                 db.add(link)
 
     def _invalidate_ai_analysis(self, db: Session, incident: Incident) -> None:
@@ -1008,13 +1119,20 @@ class IncidentService:
         for alert in alerts:
             for technique_id in correlation_service._extract_mitre_techniques(alert):
                 grouped[technique_id].append(alert)
+        correlated_rows: list[IncidentMitreMapping] = []
         for technique_id, supporting in grouped.items():
             base_id = technique_id.split(".", 1)[0]
-            technique = db.query(MitreTechnique).filter(MitreTechnique.technique_id.in_([technique_id, base_id])).order_by(
-                case((MitreTechnique.technique_id == technique_id, 0), else_=1)
-            ).first()
+            techniques = {
+                item.technique_id: item
+                for item in db.query(MitreTechnique).filter(
+                    MitreTechnique.technique_id.in_([technique_id, base_id])
+                ).all()
+            }
+            technique = techniques.get(technique_id) or techniques.get(base_id)
+            parent = techniques.get(base_id)
             tactic = technique.tactic.value if technique else "Unknown"
-            tactic = tactic.replace("_", " ").title()
+            if "_" in tactic:
+                tactic = tactic.replace("_", " ").title()
             source_ids = list(dict.fromkeys(item.id for item in supporting))
             observed = [correlation_service._observed_at(item) for item in supporting]
             temporal = 1.0 if max(observed) - min(observed) <= timedelta(minutes=correlation_service.window_minutes) else 0.5
@@ -1030,22 +1148,51 @@ class IncidentService:
             )
             row.tactic = tactic
             row.technique_name = technique.name if technique else self._mitre_name(technique_id)
+            row.parent_technique_id = base_id
+            row.parent_technique_name = (
+                parent.name if parent else (row.technique_name if technique_id == base_id else base_id)
+            )
             row.sub_technique_id = technique_id if "." in technique_id else None
             row.sub_technique_name = row.technique_name if row.sub_technique_id else None
+            row.mapping_source = "correlated"
             row.confidence = confidence
             row.confidence_reasons = [
                 f"Correlation strength: {candidate.correlation_score:.0f}/100",
                 f"Matched identifiers: {', '.join(candidate.matched_identifiers or []) or 'MITRE and time proximity'}",
                 f"Supporting alerts: {len(source_ids)}", f"Temporal proximity factor: {temporal:.1f}",
             ]
-            row.supporting_evidence = [
-                {"alert_id": item.id, "event_id": item.event_id, "rule_id": item.detection_rule_id,
-                 "why_matched": item.why_matched, "observed_at": utc_isoformat(correlation_service._observed_at(item))}
-                for item in supporting
-            ]
+            row.supporting_evidence = []
+            for item in supporting:
+                identifiers = correlation_service._identifiers(item)
+                evidence_fields = {
+                    field: identifiers.get(field)
+                    for field in candidate.matched_identifiers or []
+                    if field in identifiers and identifiers.get(field) is not None
+                }
+                row.supporting_evidence.append({
+                    "alert_id": item.id,
+                    "event_id": item.event_id,
+                    "rule_id": item.detection_rule_id,
+                    "why_matched": item.why_matched,
+                    "observed_at": utc_isoformat(correlation_service._observed_at(item)),
+                    "evidence_fields": evidence_fields,
+                })
             row.source_alert_ids = source_ids
-            row.stage_order = tactic_order.index(tactic) if tactic in tactic_order else len(tactic_order)
             row.first_seen_at, row.last_seen_at = min(observed), max(observed)
+            correlated_rows.append(row)
+            db.add(row)
+
+        chronological_rows = sorted(
+            correlated_rows,
+            key=lambda row: (
+                row.first_seen_at is None,
+                row.first_seen_at or incident.created_at,
+                tactic_order.index(row.tactic) if row.tactic in tactic_order else len(tactic_order),
+                row.technique_id,
+            ),
+        )
+        for stage_order, row in enumerate(chronological_rows):
+            row.stage_order = stage_order
             db.add(row)
 
     def _derive_attack_technique(self, alerts: Sequence[Alert]) -> dict[str, Any] | None:

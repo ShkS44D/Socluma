@@ -17,6 +17,8 @@ from src.models.sqlalchemy import (
     User,
     UserRole,
     DetectionRule,
+    MitreTactic,
+    MitreTechnique,
     RuleType,
     Severity,
 )
@@ -250,6 +252,8 @@ class DetectionPipelineTests(unittest.TestCase):
                     "Image": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
                     "CommandLine": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA==",
                     "ParentImage": r"C:\Windows\explorer.exe",
+                    "hostname": "windows-pilot-01",
+                    "agent_id": "windows-agent-01",
                 },
                 "normalized_event": {
                     "process": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
@@ -257,6 +261,8 @@ class DetectionPipelineTests(unittest.TestCase):
                     "command": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA==",
                     "command_line": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA==",
                     "parent_process": r"C:\Windows\explorer.exe",
+                    "hostname": "windows-pilot-01",
+                    "agent_id": "windows-agent-01",
                 },
                 "severity": "high",
             },
@@ -270,14 +276,47 @@ class DetectionPipelineTests(unittest.TestCase):
         self.assertFalse(payload["incident_created"])
         self.assertIsNone(payload["incident_id"])
 
+        db = self.SessionTesting()
+        try:
+            db.add_all([
+                MitreTechnique(technique_id="T1059.001", name="PowerShell", tactic=MitreTactic.EXECUTION),
+                MitreTechnique(technique_id="T1110", name="Brute Force", tactic=MitreTactic.CREDENTIAL_ACCESS),
+            ])
+            db.commit()
+        finally:
+            db.close()
+
+        progression_rule = self.client.post(
+            "/api/v1/detection-rules",
+            json={
+                "name": "Pilot Credential Stage Verification",
+                "description": "Adds a distinct ATT&CK stage for the controlled follow-up event.",
+                "rule_type": "sigma",
+                "severity": "high",
+                "rule_content": {
+                    "title": "Pilot Credential Stage Verification",
+                    "logsource": {"product": "windows", "category": "process_creation"},
+                    "level": "high",
+                    "tags": ["attack.t1110"],
+                    "detection": {
+                        "selection": {"pilot_follow_up": True},
+                        "condition": "selection",
+                    },
+                },
+            },
+        )
+        self.assertEqual(progression_rule.status_code, 201)
+
         follow_up = self.client.post(
             "/api/v1/events/ingest",
             json={
                 "source": "windows-agent", "event_type": "process", "timestamp": "2026-07-05T10:55:10Z",
                 "raw_event": {"timestamp": 1783264510, "event_id": 4688, "pilot_follow_up": True,
+                    "hostname": "windows-pilot-01", "agent_id": "windows-agent-01",
                     "Image": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
                     "CommandLine": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA=="},
                 "normalized_event": {"image": r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+                    "hostname": "windows-pilot-01", "agent_id": "windows-agent-01",
                     "command_line": "powershell.exe -EncodedCommand ZQBjAGgAbwAgACIAVABlAHMAdAAiAA=="},
                 "severity": "high",
             },

@@ -86,9 +86,14 @@ class AuthAndRbacTests(unittest.TestCase):
         }
         first = self.client.post("/api/v1/alerts", json={"source": source, "raw_data": base})
         self.assertEqual(first.status_code, 201)
+        follow_up = {**base, "event_id": "follow-up-alert"}
+        if base.get("event_type") == "malware_detection":
+            follow_up["file_hash"] = "def456"
+        elif base.get("event_type") == "suspicious_network":
+            follow_up["event_type"] = "connection"
         second = self.client.post(
             "/api/v1/alerts",
-            json={"source": source, "raw_data": {**base, "event_id": "follow-up-alert"}},
+            json={"source": source, "raw_data": follow_up},
         )
         self.assertEqual(second.status_code, 201)
         incidents_response = self.client.get("/api/v1/incidents")

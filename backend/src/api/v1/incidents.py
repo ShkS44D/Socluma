@@ -16,6 +16,7 @@ from src.models.pydantic import (
     IncidentListResponse,
     IncidentPriorityUpdate,
     IncidentStats,
+    MitreMatrixResponse,
     IncidentStatusUpdate,
     FeedbackCreate,
     FeedbackResponse,
@@ -113,7 +114,7 @@ def get_feedback_stats(
     return incident_service.get_feedback_stats(db, current_user.tenant_id)
 
 
-@router.get("/mitre-matrix")
+@router.get("/mitre-matrix", response_model=MitreMatrixResponse)
 def get_mitre_matrix(
     created_from: Optional[datetime] = None,
     created_to: Optional[datetime] = None,

@@ -611,8 +611,11 @@ class IncidentMitreMappingResponse(BaseModel):
     tactic: str
     technique_id: str
     technique_name: str
+    parent_technique_id: str
+    parent_technique_name: str
     sub_technique_id: Optional[str] = None
     sub_technique_name: Optional[str] = None
+    mapping_source: str
     confidence: float
     confidence_reasons: List[str] = Field(default_factory=list)
     supporting_evidence: List[Dict[str, Any]] = Field(default_factory=list)
@@ -622,6 +625,38 @@ class IncidentMitreMappingResponse(BaseModel):
     last_seen_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MitreMatrixIncidentResponse(BaseModel):
+    id: str
+    title: str
+    severity: str
+    status: str
+    confidence: float
+    supporting_alert_count: int
+    mapping_source: str
+    first_seen_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+
+
+class MitreMatrixTechniqueResponse(BaseModel):
+    tactic: str
+    technique_id: str
+    technique_name: str
+    parent_technique_id: str
+    parent_technique_name: str
+    sub_technique_id: Optional[str] = None
+    sub_technique_name: Optional[str] = None
+    mapping_source: str
+    attack_stage_order: int
+    incident_count: int
+    supporting_alert_count: int
+    incidents: List[MitreMatrixIncidentResponse]
+
+
+class MitreMatrixResponse(BaseModel):
+    techniques: List[MitreMatrixTechniqueResponse]
+    incident_count: int
 
 
 class Incident(IncidentBase):

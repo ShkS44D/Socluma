@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     CORRELATION_WINDOW_MINUTES: int = 15
     CORRELATION_MIN_SCORE: float = 45.0
     CORRELATION_MIN_ALERTS: int = 2
+    CORRELATION_ALLOW_REPEATED_ALERTS: bool = False
 
     # Threat intelligence
     VIRUSTOTAL_API_KEY: Optional[str] = None

@@ -453,6 +453,8 @@ class Alert(Base):
         Index("ix_alerts_detection_rule_id", "detection_rule_id"),
         Index("ix_alerts_tenant_status_created_at", "tenant_id", "status", "created_at"),
         Index("ix_alerts_tenant_severity_created_at", "tenant_id", "severity", "created_at"),
+        Index("ix_alerts_correlation_candidates", "tenant_id", "incident_id", "status", "created_at"),
+        Index("ix_alerts_tenant_event_id", "tenant_id", "event_id"),
     )
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -558,8 +560,11 @@ class IncidentMitreMapping(Base):
     tactic = Column(String(100), nullable=False)
     technique_id = Column(String(50), nullable=False)
     technique_name = Column(String(255), nullable=False)
+    parent_technique_id = Column(String(50), nullable=False, default="")
+    parent_technique_name = Column(String(255), nullable=False, default="")
     sub_technique_id = Column(String(50), nullable=True)
     sub_technique_name = Column(String(255), nullable=True)
+    mapping_source = Column(String(32), nullable=False, default="correlated")
     confidence = Column(Float, nullable=False, default=0)
     confidence_reasons = Column(JSON, nullable=False, default=list)
     supporting_evidence = Column(JSON, nullable=False, default=list)
@@ -646,6 +651,7 @@ class IncidentAlert(Base):
     __tablename__ = "incident_alerts"
     __table_args__ = (
         UniqueConstraint("incident_id", "alert_id", name="uq_incident_alerts_incident_alert"),
+        UniqueConstraint("alert_id", name="uq_incident_alerts_alert_id"),
         Index("ix_incident_alerts_incident_id", "incident_id"),
         Index("ix_incident_alerts_alert_id", "alert_id"),
         Index("ix_incident_alerts_incident_alert", "incident_id", "alert_id"),

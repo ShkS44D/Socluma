@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from src.api.deps import get_current_user, get_db
@@ -12,10 +13,11 @@ from src.core.database import Base
 from src.main import app
 from src.models.sqlalchemy import (
     Alert, AlertSource, AlertSourceType, AlertStatus, DetectionRule, Incident,
-    IncidentAlert, IncidentMitreMapping, MitreTactic, MitreTechnique, RuleType,
-    Severity, Tenant, User, UserRole,
+    IncidentAlert, IncidentMitreMapping, IncidentStatus, MitreTactic, MitreTechnique, RuleType,
+    SecurityEvent, EventType, Severity, Tenant, User, UserRole,
 )
-from src.services.incident_service import incident_service
+from src.services.correlation_service import correlation_service
+from src.services.incident_service import AlertOwnershipConflict, incident_service
 
 
 class CorrelationDrivenIncidentTests(unittest.TestCase):
@@ -44,8 +46,10 @@ class CorrelationDrivenIncidentTests(unittest.TestCase):
         other_source = AlertSource(tenant_id=other.id, name="Other EDR", type=AlertSourceType.API)
         db.add_all([user, source, other_source]); db.flush()
         db.add_all([
+            MitreTechnique(technique_id="T1059", name="Command and Scripting Interpreter", tactic=MitreTactic.EXECUTION),
             MitreTechnique(technique_id="T1059.001", name="PowerShell", tactic=MitreTactic.EXECUTION),
             MitreTechnique(technique_id="T1110", name="Brute Force", tactic=MitreTactic.CREDENTIAL_ACCESS),
+            MitreTechnique(technique_id="T1071", name="Application Layer Protocol", tactic=MitreTactic.COMMAND_AND_CONTROL),
         ]); db.commit()
         self.tenant_id, self.other_tenant_id, self.user_id = tenant.id, other.id, user.id
         self.source_id, self.other_source_id = source.id, other_source.id
@@ -144,7 +148,21 @@ class CorrelationDrivenIncidentTests(unittest.TestCase):
         mappings = db.query(IncidentMitreMapping).filter(IncidentMitreMapping.incident_id == incident.id).all()
         self.assertEqual({row.technique_id for row in mappings}, {"T1059.001", "T1110"})
         self.assertTrue(all(row.confidence > 0 and row.supporting_evidence and row.source_alert_ids for row in mappings))
-        db.close()
+        powershell = next(row for row in mappings if row.technique_id == "T1059.001")
+        brute_force = next(row for row in mappings if row.technique_id == "T1110")
+        self.assertEqual((powershell.stage_order, brute_force.stage_order), (0, 1))
+        self.assertEqual(powershell.parent_technique_id, "T1059")
+        self.assertEqual(powershell.parent_technique_name, "Command and Scripting Interpreter")
+        self.assertEqual(powershell.sub_technique_name, "PowerShell")
+        self.assertEqual(powershell.mapping_source, "correlated")
+        incident_id = incident.id; db.close()
+        detail = self.client.get(f"/api/v1/incidents/{incident_id}")
+        self.assertEqual(detail.status_code, 200)
+        api_mapping = next(item for item in detail.json()["mitre_mappings"] if item["technique_id"] == "T1059.001")
+        self.assertEqual(api_mapping["parent_technique_id"], "T1059")
+        self.assertEqual(api_mapping["sub_technique_id"], "T1059.001")
+        self.assertEqual(api_mapping["mapping_source"], "correlated")
+        self.assertTrue(api_mapping["supporting_evidence"][0]["alert_id"])
 
     def test_unrelated_window_and_tenant_alerts_do_not_correlate(self):
         db = self.Session(); first = self._alert(db)
@@ -172,8 +190,152 @@ class CorrelationDrivenIncidentTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json(); self.assertEqual(body["incident_count"], 1)
         self.assertEqual({item["technique_id"] for item in body["techniques"]}, {"T1059.001", "T1110"})
+        self.assertTrue(all(item["mapping_source"] == "correlated" for item in body["techniques"]))
+        self.assertTrue(all(item["supporting_alert_count"] >= 1 for item in body["techniques"]))
         filtered = self.client.get("/api/v1/incidents/mitre-matrix", params={"incident_id": incident.id}).json()
         self.assertEqual(filtered["incident_count"], 1)
+
+    def test_repeated_identical_alerts_do_not_create_attack_chain_by_default(self):
+        db = self.Session(); first = self._alert(db); second = self._alert(db, minutes=1)
+        self.assertIsNone(incident_service.process_alert(db, first))
+        self.assertIsNone(incident_service.process_alert(db, second))
+        self.assertEqual(db.query(Incident).count(), 0); db.close()
+
+    def test_tactic_casing_matches_standard_matrix_column(self):
+        db = self.Session()
+        first = self._alert(db, technique="T1110")
+        self.assertIsNone(incident_service.process_alert(db, first))
+        second = self._alert(db, technique="T1071", minutes=1)
+        incident = incident_service.process_alert(db, second)
+        mapping = db.query(IncidentMitreMapping).filter_by(
+            incident_id=incident.id,
+            technique_id="T1071",
+        ).one()
+        self.assertEqual(mapping.tactic, "Command and Control")
+        db.close()
+
+    def test_strong_entity_and_time_without_stage_or_behavior_stays_pending(self):
+        db = self.Session()
+        first = self._alert(db, technique="", event_type="alpha")
+        second = self._alert(db, technique="", minutes=1, event_type="beta")
+        self.assertIsNone(incident_service.process_alert(db, first))
+        self.assertIsNone(incident_service.process_alert(db, second))
+        self.assertEqual(db.query(Incident).count(), 0); db.close()
+
+    def test_more_than_500_old_alerts_do_not_hide_recent_candidates(self):
+        db = self.Session()
+        old_base = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        db.add_all([
+            Alert(
+                tenant_id=self.tenant_id, source_id=self.source_id,
+                ocsf_data={"attack_techniques": ["T1059.001"]},
+                raw_data={"hostname": f"old-{index}", "agent_id": f"old-agent-{index}"},
+                severity=Severity.LOW, status=AlertStatus.OPEN,
+                created_at=old_base + timedelta(seconds=index),
+            ) for index in range(525)
+        ]); db.commit()
+        first = self._alert(db, minutes=0)
+        self.assertIsNone(incident_service.process_alert(db, first))
+        second = self._alert(db, technique="T1110", minutes=1)
+        incident = incident_service.process_alert(db, second)
+        self.assertIsNotNone(incident)
+        self.assertEqual(db.query(IncidentAlert).filter_by(incident_id=incident.id).count(), 2); db.close()
+
+    def test_more_than_500_eligible_window_alerts_are_keyset_paged(self):
+        db = self.Session()
+        target = self._alert(db, minutes=0)
+        base = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)
+        db.add_all([
+            Alert(
+                tenant_id=self.tenant_id,
+                source_id=self.source_id,
+                ocsf_data={"attack_techniques": ["T1059.001"]},
+                raw_data={
+                    "hostname": f"distractor-{index}",
+                    "agent_id": f"distractor-agent-{index}",
+                    "source_ip": f"198.51.{index // 250}.{index % 250 + 1}",
+                },
+                severity=Severity.LOW,
+                status=AlertStatus.OPEN,
+                created_at=base + timedelta(seconds=60 + index),
+            )
+            for index in range(525)
+        ])
+        db.commit()
+        incoming = self._alert(db, technique="T1110", minutes=15)
+
+        candidate = correlation_service.correlate_alert(db, incoming)
+
+        self.assertTrue(candidate.qualified)
+        self.assertEqual(candidate.candidate_alert_ids, [target.id])
+        self.assertEqual(candidate.evaluated_candidate_count, 526)
+        self.assertGreater(candidate.query_duration_ms, 0)
+        incident = incident_service.process_alert(db, incoming)
+        self.assertIsNotNone(incident)
+        self.assertEqual(
+            {row.alert_id for row in db.query(IncidentAlert).filter_by(incident_id=incident.id).all()},
+            {target.id, incoming.id},
+        )
+        db.close()
+
+    def test_candidate_order_is_deterministic(self):
+        db = self.Session()
+        first = self._alert(db, minutes=0)
+        second = self._alert(db, minutes=0)
+        incoming = self._alert(db, technique="T1110", minutes=1)
+        candidate = correlation_service.correlate_alert(db, incoming)
+        self.assertTrue(candidate.qualified)
+        self.assertEqual(candidate.candidate_alert_ids, [max(first.id, second.id)])
+        db.close()
+
+    def test_linked_alert_with_missing_direct_owner_is_rejected(self):
+        db = self.Session(); alert = self._alert(db)
+        incident = Incident(tenant_id=self.tenant_id, title="Historical", status=IncidentStatus.OPEN)
+        db.add(incident); db.flush()
+        db.add(IncidentAlert(incident_id=incident.id, alert_id=alert.id, correlation_score=50)); db.commit()
+        with self.assertRaises(AlertOwnershipConflict):
+            incident_service.process_alert(db, alert)
+        db.rollback(); self.assertIsNone(db.query(Alert).filter_by(id=alert.id).one().incident_id); db.close()
+
+    def test_open_and_closed_incident_alerts_are_never_reused(self):
+        db = self.Session(); first = self._alert(db); incident_service.process_alert(db, first)
+        second = self._alert(db, technique="T1110", minutes=2); incident = incident_service.process_alert(db, second)
+        original_links = {row.alert_id for row in db.query(IncidentAlert).filter_by(incident_id=incident.id).all()}
+        self.assertEqual(incident_service.process_alert(db, first).id, incident.id)
+        incident.status = IncidentStatus.CLOSED; db.commit()
+        later = self._alert(db, technique="T1110", minutes=3)
+        self.assertIsNone(incident_service.process_alert(db, later))
+        self.assertEqual({row.alert_id for row in db.query(IncidentAlert).filter_by(incident_id=incident.id).all()}, original_links)
+        self.assertEqual(db.query(Incident).count(), 1); db.close()
+
+    def test_database_prevents_one_alert_linking_to_two_incidents(self):
+        db = self.Session(); alert = self._alert(db)
+        first = Incident(tenant_id=self.tenant_id, title="First")
+        second = Incident(tenant_id=self.tenant_id, title="Second")
+        db.add_all([first, second]); db.flush()
+        db.add(IncidentAlert(incident_id=first.id, alert_id=alert.id, correlation_score=50)); db.commit()
+        db.add(IncidentAlert(incident_id=second.id, alert_id=alert.id, correlation_score=50))
+        with self.assertRaises(IntegrityError): db.commit()
+        db.rollback()
+        self.assertEqual(db.query(IncidentAlert).filter_by(alert_id=alert.id).count(), 1); db.close()
+
+    def test_late_event_time_uses_security_event_not_ingestion_time(self):
+        db = self.Session()
+        observed = datetime(2026, 7, 17, 12, 0, tzinfo=timezone.utc)
+        event = SecurityEvent(
+            tenant_id=self.tenant_id, source="edr", event_type=EventType.PROCESS,
+            raw_event={}, normalized_event={"hostname": "late-host", "agent_id": "late-agent"}, timestamp=observed,
+        )
+        db.add(event); db.flush()
+        first = Alert(
+            tenant_id=self.tenant_id, source_id=self.source_id, event_id=event.id,
+            ocsf_data={"attack_techniques": ["T1059.001"]}, raw_data={"hostname": "late-host", "agent_id": "late-agent"},
+            severity=Severity.HIGH, status=AlertStatus.OPEN, created_at=observed + timedelta(days=2),
+        ); db.add(first); db.commit()
+        self.assertIsNone(incident_service.process_alert(db, first))
+        second = self._alert(db, technique="T1110", minutes=5, hostname="late-host", agent_id="late-agent", source_ip=None)
+        incident = incident_service.process_alert(db, second)
+        self.assertIsNotNone(incident); db.close()
 
 
 if __name__ == "__main__":
