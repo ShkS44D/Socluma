@@ -110,7 +110,9 @@ class DetectionEngine:
         self,
         db: Session,
         tenant_id: str,
-        event: SecurityEvent
+        event: SecurityEvent,
+        *,
+        allow_external_enrichment: bool = True,
     ) -> EventAnalysisResult:
         with timed_detection():
             matches_with_results = self.process_event(db, tenant_id, event)
@@ -131,13 +133,13 @@ class DetectionEngine:
             alert = self.create_alert_from_match(db, tenant_id, match, event, match_result, source_id=source_id)
             
             if settings.USE_REDIS_MOCK:
-                incident = incident_service.process_alert(db, alert)
+                incident = incident_service.process_alert(db, alert, allow_external_enrichment=allow_external_enrichment)
                 incident_created = incident is not None
                 incident_id = incident.id if incident else None
             else:
                 from src.workers.tasks import process_alert_for_incident_sync
                 try:
-                    result = process_alert_for_incident_sync(alert.id)
+                    result = process_alert_for_incident_sync(alert.id, allow_external_enrichment=allow_external_enrichment)
                     incident_created = not result.startswith("pending:")
                     incident_id = result if incident_created else None
                 except Exception:

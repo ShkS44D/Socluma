@@ -11,6 +11,7 @@ from src.models.sqlalchemy import (
     DetectionRule,
     Incident,
     IncidentAlert,
+    IncidentMitreMapping,
     Tenant,
     User,
     UserRole,
@@ -81,6 +82,9 @@ def test_pilot_seed_is_strict_idempotent_tenant_scoped_and_offline(monkeypatch):
             assert len(correlated) == 4
             assert all(check.query(IncidentAlert).filter_by(incident_id=item.id).count() >= 2 for item in correlated)
             assert all(item.correlation_score and item.correlation_score >= 45 for item in correlated)
+            assert all(check.query(IncidentMitreMapping).filter_by(
+                incident_id=item.id, mapping_source="correlated",
+            ).count() >= 1 for item in correlated)
             assert check.query(Incident).filter(Incident.tenant_id == other_tenant.id).count() == 0
             assert check.query(Alert).filter(Alert.tenant_id == other_tenant.id).count() == 0
         finally:

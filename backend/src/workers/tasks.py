@@ -12,14 +12,14 @@ from src.services.soar_action_service import soar_action_service
 from .celery_app import celery_app
 
 
-def process_alert_for_incident_sync(alert_id: str) -> str:
+def process_alert_for_incident_sync(alert_id: str, *, allow_external_enrichment: bool = True) -> str:
     db = SessionLocal()
     try:
         alert = db.query(Alert).filter(Alert.id == alert_id).first()
         if alert is None:
             raise ValueError("Alert not found")
 
-        incident = incident_service.process_alert(db, alert)
+        incident = incident_service.process_alert(db, alert, allow_external_enrichment=allow_external_enrichment)
         if incident is None:
             logger.info("Alert %s retained pending correlation", alert_id)
             return f"pending:{alert_id}"

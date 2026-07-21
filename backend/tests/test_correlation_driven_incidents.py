@@ -185,14 +185,26 @@ class CorrelationDrivenIncidentTests(unittest.TestCase):
 
     def test_matrix_uses_incident_mappings_and_is_tenant_scoped(self):
         db = self.Session(); a = self._alert(db)
-        incident_service.process_alert(db, a); b = self._alert(db, technique="T1110", minutes=2); incident = incident_service.process_alert(db, b); db.close()
+        incident_service.process_alert(db, a); b = self._alert(db, technique="T1110", minutes=2); incident = incident_service.process_alert(db, b)
+        db.add(IncidentMitreMapping(
+            tenant_id=self.tenant_id,
+            incident_id=incident.id,
+            tactic="Unknown",
+            technique_id="T9999",
+            technique_name="Historical placeholder",
+            parent_technique_id="T9999",
+            parent_technique_name="Historical placeholder",
+            mapping_source="legacy-derived",
+            source_alert_ids=[],
+        ))
+        db.commit(); incident_id = incident.id; db.close()
         response = self.client.get("/api/v1/incidents/mitre-matrix")
         self.assertEqual(response.status_code, 200)
         body = response.json(); self.assertEqual(body["incident_count"], 1)
         self.assertEqual({item["technique_id"] for item in body["techniques"]}, {"T1059.001", "T1110"})
         self.assertTrue(all(item["mapping_source"] == "correlated" for item in body["techniques"]))
         self.assertTrue(all(item["supporting_alert_count"] >= 1 for item in body["techniques"]))
-        filtered = self.client.get("/api/v1/incidents/mitre-matrix", params={"incident_id": incident.id}).json()
+        filtered = self.client.get("/api/v1/incidents/mitre-matrix", params={"incident_id": incident_id}).json()
         self.assertEqual(filtered["incident_count"], 1)
 
     def test_repeated_identical_alerts_do_not_create_attack_chain_by_default(self):

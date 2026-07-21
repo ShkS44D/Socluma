@@ -1242,6 +1242,19 @@ class MitreTechniqueBase(BaseModel):
     name: str
     tactic: MitreTactic
     description: Optional[str] = None
+    tactic_id: Optional[str] = None
+    tactic_order: Optional[int] = None
+    tactics: List[Dict[str, Any]] = Field(default_factory=list)
+    parent_technique_id: Optional[str] = None
+    parent_technique_name: Optional[str] = None
+    sub_technique_id: Optional[str] = None
+    sub_technique_name: Optional[str] = None
+    is_subtechnique: bool = False
+    is_revoked: bool = False
+    is_deprecated: bool = False
+    catalog_version: Optional[str] = None
+    catalog_source: Optional[str] = None
+    external_url: Optional[str] = None
 
 
 class MitreTechniqueCreate(MitreTechniqueBase):

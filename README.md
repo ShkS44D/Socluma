@@ -116,6 +116,8 @@ The AI Investigation Copilot helps analysts reason over tenant-scoped investigat
 
 Each incident exposes a deterministic explanation at `GET /api/v1/incidents/{incident_id}/explanation`. The response identifies the primary alert, subsequent correlated alerts, source events, matching rules, correlation reasons, observed time window, affected entities, MITRE mappings, risk breakdown, evidence references, limitations, and recommended investigation questions. This explanation works without OpenAI and is the source of truth for the incident detail panel.
 
+After database migrations, synchronize the pinned offline MITRE ATT&CK Enterprise v18.1 reference catalog with `cd backend && python scripts/bootstrap_mitre_catalog.py`. The command is idempotent and makes no network request. See `INCIDENT_INTELLIGENCE.md` for catalog provenance, the correlation lifecycle, full-chain simulation, matrix modes, isolated browser acceptance, and troubleshooting.
+
 Provenance is labelled as recorded, manual, or legacy-derived. Historical incidents are never presented as having correlation facts that were not stored at creation time. Official risk scores remain deterministic and their components, including any 0-100 bounding adjustment, reconcile to the displayed total.
 
 Implemented AI capabilities:

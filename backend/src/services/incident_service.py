@@ -68,7 +68,7 @@ class IncidentService:
         IncidentStatus.CLOSED: (),
     }
 
-    def process_alert(self, db: Session, alert: Alert) -> Incident | None:
+    def process_alert(self, db: Session, alert: Alert, *, allow_external_enrichment: bool = True) -> Incident | None:
         if db.get_bind().dialect.name == "postgresql":
             db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:scope))"), {"scope": f"incident-correlation:{alert.tenant_id}"})
             logger.info(
@@ -111,7 +111,10 @@ class IncidentService:
             self._validate_candidate_ownership(db, candidate_alert, candidate.incident)
         candidate.alerts = sorted(locked_alerts, key=lambda item: (correlation_service._observed_at(item), item.id))
         title, description = correlation_service.derive_incident_metadata(candidate.alerts)
-        threat_intel_results = threat_intel_service.lookup_incident_indicators(db, candidate.alerts)
+        threat_intel_results = (
+            threat_intel_service.lookup_incident_indicators(db, candidate.alerts)
+            if allow_external_enrichment else []
+        )
         risk = risk_service.calculate_risk(
             db,
             tenant_id=alert.tenant_id,
@@ -827,7 +830,10 @@ class IncidentService:
             Incident,
             (Incident.id == IncidentMitreMapping.incident_id) &
             (Incident.tenant_id == IncidentMitreMapping.tenant_id),
-        ).join(correlated, correlated.c.incident_id == Incident.id).filter(IncidentMitreMapping.tenant_id == tenant_id)
+        ).join(correlated, correlated.c.incident_id == Incident.id).filter(
+            IncidentMitreMapping.tenant_id == tenant_id,
+            IncidentMitreMapping.mapping_source == "correlated",
+        )
         if created_from:
             query = query.filter(Incident.created_at >= created_from)
         if created_to:
@@ -1147,10 +1153,11 @@ class IncidentService:
                 tenant_id=incident.tenant_id, incident_id=incident.id, technique_id=technique_id
             )
             row.tactic = tactic
-            row.technique_name = technique.name if technique else self._mitre_name(technique_id)
-            row.parent_technique_id = base_id
+            row.technique_name = technique.name if technique else f"Unresolved technique ({technique_id})"
+            row.parent_technique_id = technique.parent_technique_id if technique and technique.parent_technique_id else base_id
             row.parent_technique_name = (
-                parent.name if parent else (row.technique_name if technique_id == base_id else base_id)
+                technique.parent_technique_name if technique and technique.parent_technique_name
+                else parent.name if parent else (row.technique_name if technique_id == base_id else f"Unresolved parent ({base_id})")
             )
             row.sub_technique_id = technique_id if "." in technique_id else None
             row.sub_technique_name = row.technique_name if row.sub_technique_id else None

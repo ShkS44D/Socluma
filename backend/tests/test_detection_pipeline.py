@@ -17,11 +17,16 @@ from src.models.sqlalchemy import (
     User,
     UserRole,
     DetectionRule,
+    IncidentAlert,
+    IncidentMitreMapping,
     MitreTactic,
     MitreTechnique,
     RuleType,
     Severity,
 )
+from src.services.default_detection_rules import DEFAULT_DETECTION_RULES
+from src.services.mitre_technique_service import mitre_technique_service
+from src.services.threat_intel_service import threat_intel_service
 
 
 class DetectionPipelineTests(unittest.TestCase):
@@ -92,6 +97,62 @@ class DetectionPipelineTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_get_current_user
         app.dependency_overrides[get_current_auth_context] = override_get_current_auth_context
+
+    def test_full_attack_chain_simulation_uses_real_pipeline_without_external_enrichment(self):
+        selected = {"T1059.001", "T1003.001", "T1105"}
+        db = self.SessionTesting()
+        try:
+            mitre_technique_service.bootstrap_catalog(db)
+            for definition in DEFAULT_DETECTION_RULES:
+                if definition["mitre_technique_id"] not in selected:
+                    continue
+                values = dict(definition)
+                values["created_by"] = self.user_id
+                db.add(DetectionRule(tenant_id=self.tenant_id, **values))
+            db.commit()
+        finally:
+            db.close()
+
+        original_lookup = threat_intel_service.lookup_incident_indicators
+        threat_intel_service.lookup_incident_indicators = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("simulation attempted external threat-intelligence enrichment")
+        )
+        try:
+            response = self.client.post("/api/v1/events/simulate/full_attack_chain")
+            repeated_response = self.client.post("/api/v1/events/simulate/full_attack_chain")
+        finally:
+            threat_intel_service.lookup_incident_indicators = original_lookup
+        self.assertEqual(response.status_code, 201, response.text)
+        results = response.json()
+        self.assertEqual(len(results), 3)
+        self.assertFalse(results[0]["incident_created"])
+        incident_ids = {item["incident_id"] for item in results[1:] if item["incident_id"]}
+        self.assertEqual(len(incident_ids), 1)
+        self.assertEqual(repeated_response.status_code, 201, repeated_response.text)
+        repeated = repeated_response.json()
+        self.assertFalse(repeated[0]["incident_created"])
+        repeated_incident_ids = {item["incident_id"] for item in repeated[1:] if item["incident_id"]}
+        self.assertEqual(len(repeated_incident_ids), 1)
+        self.assertTrue(incident_ids.isdisjoint(repeated_incident_ids))
+
+        incident_id = incident_ids.pop()
+        db = self.SessionTesting()
+        try:
+            links = db.query(IncidentAlert).filter_by(incident_id=incident_id).order_by(IncidentAlert.sequence_order).all()
+            self.assertEqual(len(links), 3)
+            self.assertEqual(len({link.alert_id for link in links}), 3)
+            self.assertTrue(all(link.alert.incident_id == incident_id for link in links))
+            mappings = db.query(IncidentMitreMapping).filter_by(incident_id=incident_id, mapping_source="correlated").all()
+            self.assertGreaterEqual(len(mappings), 3)
+            self.assertGreaterEqual(len({mapping.tactic for mapping in mappings}), 3)
+            self.assertTrue(all(mapping.supporting_evidence and mapping.source_alert_ids for mapping in mappings))
+        finally:
+            db.close()
+
+        matrix = self.client.get("/api/v1/incidents/mitre-matrix", params={"incident_id": incident_id})
+        self.assertEqual(matrix.status_code, 200, matrix.text)
+        self.assertEqual(matrix.json()["incident_count"], 1)
+        self.assertGreaterEqual(len(matrix.json()["techniques"]), 3)
 
     def test_sigma_rule_process_powershell_event_matches(self):
         # 1. Create sigma detection rule

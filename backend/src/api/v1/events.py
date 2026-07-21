@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
 from datetime import timedelta
+from copy import deepcopy
+import uuid
 
 from src.api.deps import get_db, get_current_user, get_current_auth_context, AuthContext, require_roles
 from src.api.openapi_examples import EVENT_INGEST_EXAMPLES, SOC_SIMULATION_SCENARIOS
@@ -150,11 +152,29 @@ def simulate_attack(
         )
 
     results: List[IngestionResponse] = []
-    for event_payload in scenario["events"]:
+    run_id = str(uuid.uuid4())
+    observed_at = get_utc_now()
+    run_octets = (int(run_id[0:2], 16), int(run_id[2:4], 16), int(run_id[4:6], 16))
+    for index, template in enumerate(scenario["events"]):
+        event_payload = deepcopy(template)
+        event_payload["timestamp"] = observed_at + timedelta(seconds=index * 30)
+        for section in ("raw_event", "normalized_event"):
+            event_payload.setdefault(section, {})
+            event_payload[section].update({
+                "synthetic": True,
+                "simulation_run_id": run_id,
+                "hostname": f"triageops-sim-{run_id[:8]}",
+                "agent_id": f"sim-agent-{run_id[:8]}",
+                "source_ip": f"10.{run_octets[0]}.{run_octets[1]}.{max(1, run_octets[2])}",
+                "source_host": f"triageops-sim-source-{run_id[:8]}",
+                "user": f"synthetic-user-{run_id[:8]}",
+            })
         event_data = SecurityEventCreate(**event_payload)
         event = security_event_service.create_event(db, current_user.tenant_id, event_data)
         
-        analysis_result = detection_engine.analyze_and_process_event(db, current_user.tenant_id, event)
+        analysis_result = detection_engine.analyze_and_process_event(
+            db, current_user.tenant_id, event, allow_external_enrichment=False,
+        )
         db.refresh(event, attribute_names=["detection_matches"])
         audit_service.record(
             db,
@@ -163,7 +183,7 @@ def simulate_attack(
             tenant_id=current_user.tenant_id,
             resource_type="security_event",
             resource_id=event.id,
-            details={"scenario": scenario_id, "scenario_name": scenario["name"]},
+            details={"scenario": scenario_id, "scenario_name": scenario["name"], "simulation_run_id": run_id},
         )
         results.append(IngestionResponse(
             id=event.id,

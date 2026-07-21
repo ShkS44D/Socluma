@@ -20,6 +20,31 @@ Focused browser acceptance uses the existing Playwright configuration in `fronte
 
 Troubleshooting: pending alerts are expected until a qualifying peer arrives. If expected alerts do not correlate, inspect strong normalized identifiers, event timestamps, MITRE stage order, and structured decision logs. `repeated_activity` should be enabled only for a documented deployment policy. If migration preflight reports ownership conflicts, stop and reconcile those named records through an explicit audited operation before retrying; do not delete or move links ad hoc. If a matrix technique is absent, verify detection-rule or OCSF MITRE data. Restart backend and workers after changing correlation configuration.
 
+## Authoritative ATT&CK catalog and simulation acceptance
+
+TriageOps carries an offline, reproducible subset generated from the official MITRE ATT&CK Enterprise STIX 2.1 release `v18.1` (`mitre-attack/attack-stix-data`, source SHA-256 `f857d8f78f2f0c0b7db321a711a39fba98546c1e3076a657684850c83d0962fb`). The checked-in JSON contains every technique referenced by enabled built-in rules, pilot fixtures, and the full-chain scenario, plus required parents. It records all applicable tactics and their Enterprise matrix order, parent/sub-technique separation, descriptions, revoked/deprecated state, source version, and authoritative ATT&CK URL. Unknown IDs remain visibly unresolved and generate a safe metadata warning; they are never assigned a guessed tactic.
+
+Synchronize the shared reference catalog after migrations:
+
+```bash
+cd backend
+python scripts/bootstrap_mitre_catalog.py
+```
+
+The command is offline and idempotent. `scripts/build_mitre_catalog.py` regenerates the snapshot only from a separately obtained official STIX bundle; normal startup and tests do not download ATT&CK data. Parent `T1059 Command and Scripting Interpreter` and sub-technique `T1059.001 PowerShell` remain distinct. Multi-tactic techniques retain every official tactic while the earliest Enterprise matrix tactic is the deterministic primary display stage.
+
+`POST /api/v1/events/simulate/full_attack_chain` creates three chronological, synthetic process events with run-unique host, agent, source, and user identities. They traverse normal event storage, Sigma detection, alert creation, deterministic correlation, incident risk/evidence, MITRE persistence, and matrix aggregation. The first alert remains pending; the second creates the incident; the third updates it. Every run is isolated from prior simulations. AI and external threat-intelligence enrichment are disabled for this simulation, and no evidence is inserted outside the processed synthetic events.
+
+The matrix defaults to mapped tactics when mappings exist, supports show-all and tactic-jump modes, exposes a discoverable horizontal desktop matrix, and uses tactic accordions on tablet/mobile. An empty result explains that filters or missing correlated data produced no mappings. Filters remain date/severity/status/incident scoped, and every drill-down uses persisted incident mappings with verified source alerts only. If the matrix is empty, run the catalog bootstrap, confirm the incident has at least two linked alerts and `correlated` mappings, then check the current filters.
+
+The real browser lifecycle is opt-in and must run only against the isolated acceptance Compose file:
+
+```bash
+E2E_REAL_LIFECYCLE=1 npx playwright test tests/e2e/real-correlation-lifecycle.spec.ts
+```
+
+Supply the isolated frontend/API URLs and synthetic analyst credentials through `E2E_BASE_URL`, `E2E_API_BASE_URL`, `E2E_EMAIL`, and `E2E_PASSWORD`. Keep OpenAI, OTX, AbuseIPDB, and VirusTotal credentials blank. Failure-only screenshots, traces, and videos are temporary diagnostics and must not be committed.
+
 ## Incident Creation
 
 An incident can be created by detection and correlation workflows or by a Playbook step. ORM-created incidents default to a manual origin. Detection-created incidents retain the alert that first caused incident creation as their deterministic primary alert. Alerts added later retain their recorded correlation reason, score, sequence, risk contribution, matching entities and indicators, and time difference from the primary alert.

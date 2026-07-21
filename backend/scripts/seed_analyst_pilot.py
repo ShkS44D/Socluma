@@ -22,20 +22,20 @@ from src.core.database import SessionLocal
 from src.models.pydantic import (
     IncidentEvidenceCreate,
     InvestigationNoteCreate,
-    MitreTechniqueCreate,
     SecurityEventCreate,
 )
 from src.models.sqlalchemy import (
     EvidenceType,
     Incident,
+    IncidentAlert,
+    IncidentMitreMapping,
     IncidentStatus,
     InvestigationNote,
-    MitreTactic,
-    MitreTechnique,
     Severity,
     User,
 )
 from src.services.detection_engine import detection_engine
+from src.services.correlation_service import CorrelationCandidate, correlation_service
 from src.services.incident_service import incident_service
 from src.services.mitre_technique_service import mitre_technique_service
 from src.services.security_event_service import security_event_service
@@ -68,6 +68,36 @@ def _close_for_isolation(db, tenant_id: str, incident: Incident) -> None:
 def _create_detection_scenario(db, user: User, name: str, simulation: str) -> Incident:
     existing = _existing(db, user.tenant_id, name)
     if existing:
+        links = db.query(IncidentAlert).filter(
+            IncidentAlert.incident_id == existing.id,
+        ).order_by(IncidentAlert.sequence_order, IncidentAlert.alert_id).all()
+        alerts = [link.alert for link in links if link.alert is not None]
+        has_correlated_mapping = db.query(IncidentMitreMapping.id).filter(
+            IncidentMitreMapping.tenant_id == user.tenant_id,
+            IncidentMitreMapping.incident_id == existing.id,
+            IncidentMitreMapping.mapping_source == "correlated",
+        ).first()
+        if len(alerts) >= 2 and not has_correlated_mapping:
+            matched_identifiers = list(dict.fromkeys(
+                identifier
+                for index, alert in enumerate(alerts)
+                for peer in alerts[index + 1:]
+                for identifier in correlation_service._matched_identifier_names(alert, peer)
+            ))
+            candidate = CorrelationCandidate(
+                incident=existing,
+                alerts=alerts,
+                correlation_score=float(existing.correlation_score or max(
+                    (link.correlation_score or 0 for link in links), default=0,
+                )),
+                correlation_reasons=[existing.creation_reason or "Recorded synthetic pilot correlation"],
+                qualified=True,
+                matched_identifiers=matched_identifiers,
+                candidate_alert_ids=[alert.id for alert in alerts],
+                correlation_kind="attack_chain",
+            )
+            incident_service._sync_mitre_mappings(db, existing, alerts, candidate)
+            db.commit()
         return existing
 
     incident_ids: list[str] = []
@@ -149,22 +179,7 @@ settings = get_settings()
 
 
 def _ensure_pilot_mitre_metadata(db) -> None:
-    required = (
-        ("T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS),
-        ("T1071", "Application Layer Protocol", MitreTactic.COMMAND_AND_CONTROL),
-    )
-    for technique_id, name, tactic in required:
-        if db.query(MitreTechnique).filter(MitreTechnique.technique_id == technique_id).first():
-            continue
-        mitre_technique_service.create_technique(
-            db,
-            MitreTechniqueCreate(
-                technique_id=technique_id,
-                name=name,
-                tactic=tactic,
-                description="Synthetic pilot reference metadata for an existing ATT&CK technique.",
-            ),
-        )
+    mitre_technique_service.bootstrap_catalog(db)
 
 
 def _pilot_user(db) -> User:
