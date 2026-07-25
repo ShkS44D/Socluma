@@ -141,7 +141,14 @@ class TriageOpsAPIClient:
         else:
             payload["timestamp"] = datetime.now(timezone.utc).isoformat()
         
-        logger.debug(f"About to send event payload: {json.dumps(payload)}")
+        logger.debug(
+            "About to send event",
+            extra={
+                "event_source": source,
+                "event_type": event_type,
+                "event_timestamp": payload["timestamp"],
+            },
+        )
         
         try:
             response = self._post(url, payload)

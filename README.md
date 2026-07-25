@@ -170,6 +170,9 @@ Backend logs are structured JSON and include request correlation fields when ava
 
 The API accepts inbound `X-Request-ID` and returns it on responses. The collector also sends request IDs with heartbeat and event submissions.
 
+For Windows channel configuration, supported Sigma syntax, rule testing, and
+USB Event 6416 diagnostics, see [DETECTION_RULE_TROUBLESHOOTING.md](DETECTION_RULE_TROUBLESHOOTING.md).
+
 Prometheus metrics are exposed at `/metrics` when `METRICS_ENABLED=true`. Current metrics include API latency and status codes, authentication outcomes, collector heartbeats, collector event ingestion, detection execution, alert creation, incident creation, WebSocket connections/events, Redis status, database health latency, queue health latency, worker execution time, connector execution totals, connector failures, retries, timeouts, execution duration, and approval latency.
 
 WebSocket connections support lightweight heartbeat messages so clients and proxies can detect stale connections without polling the REST API. Configure the heartbeat interval with `WEBSOCKET_HEARTBEAT_SECONDS`.

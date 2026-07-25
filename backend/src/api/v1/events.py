@@ -54,6 +54,10 @@ def ingest_event(
             if log_source:
                 log_source.last_seen = get_utc_now()
                 log_source.status = "active"
+        normalized = dict(event_data.normalized_event or {})
+        normalized.setdefault("collector_id", auth_context.collector.id)
+        normalized.setdefault("agent_id", auth_context.collector.id)
+        event_data.normalized_event = normalized
     
     # If normalized event not provided, try to parse raw log
     if not event_data.normalized_event:

@@ -88,14 +88,9 @@ const DetectionRuleFormModal: React.FC<DetectionRuleFormModalProps> = ({
       hasErrors = true
     }
 
-    let parsedRuleContent: Record<string, any> | undefined
-    if (type === 'sigma' && ruleContent.trim()) {
-      try {
-        parsedRuleContent = JSON.parse(ruleContent)
-      } catch {
-        setSigmaError('Invalid JSON format')
-        hasErrors = true
-      }
+    if (type === 'sigma' && !ruleContent.trim()) {
+      setSigmaError('Sigma YAML or JSON is required')
+      hasErrors = true
     }
 
     if (hasErrors) {
@@ -108,7 +103,7 @@ const DetectionRuleFormModal: React.FC<DetectionRuleFormModalProps> = ({
         description: description || undefined,
         severity,
         rule_type: type,
-        rule_content: parsedRuleContent,
+        sigma_rule: type === 'sigma' ? ruleContent : undefined,
         enabled: initialData ? initialData.enabled : true
       }
 
@@ -172,7 +167,7 @@ const DetectionRuleFormModal: React.FC<DetectionRuleFormModalProps> = ({
           {type === 'sigma' && (
             <Stack>
               <Typography variant="subtitle2" gutterBottom>
-                Sigma Content (JSON)
+                Sigma Content (YAML or JSON)
               </Typography>
               <TextField
                 value={ruleContent}

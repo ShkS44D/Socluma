@@ -269,6 +269,33 @@ const AlertDetail: React.FC = () => {
         </Stack>
       </SectionCard>
 
+      <SectionCard title="Correlation Status">
+        <Stack spacing={1}>
+          <StatusChip
+            label={incident ? 'Correlated incident' : 'Pending correlation'}
+            color={incident ? 'success' : 'warning'}
+          />
+          {!incident && (
+            <>
+              <Typography variant="body2">
+                {alert.ocsf_data?.pending_correlation?.reason ||
+                  'This isolated alert remains pending until qualifying related alerts arrive.'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Correlation window:</strong>{' '}
+                {alert.ocsf_data?.pending_correlation?.correlation_window_minutes ?? 15} minutes
+              </Typography>
+              <Typography variant="body2">
+                <strong>Available keys:</strong>{' '}
+                {Object.entries(alert.ocsf_data?.pending_correlation?.correlation_keys || {})
+                  .map(([key, value]) => `${key}=${String(value)}`)
+                  .join(', ') || 'No strong correlation keys were captured'}
+              </Typography>
+            </>
+          )}
+        </Stack>
+      </SectionCard>
+
       {alert.matched_condition && (
         <SectionCard title="Matched Condition">
           <Box

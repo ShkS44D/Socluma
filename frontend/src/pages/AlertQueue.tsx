@@ -137,13 +137,14 @@ const AlertQueue: React.FC = () => {
                 <TableCell>Source</TableCell>
                 <TableCell>Class</TableCell>
                 <TableCell>Activity</TableCell>
+                <TableCell>Correlation</TableCell>
                 <TableCell>Created</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {alerts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     No alerts found
                   </TableCell>
                 </TableRow>
@@ -170,6 +171,12 @@ const AlertQueue: React.FC = () => {
                     <TableCell>{String(alert.raw_data?.source || 'api')}</TableCell>
                     <TableCell>{alert.ocsf_data?.class_name || 'Unknown'}</TableCell>
                     <TableCell>{alert.ocsf_data?.activity_name || 'Unknown'}</TableCell>
+                    <TableCell>
+                      <StatusChip
+                        label={alert.incident_id ? 'Correlated' : 'Pending correlation'}
+                        color={alert.incident_id ? 'success' : 'warning'}
+                      />
+                    </TableCell>
                     <TableCell>{formatDate(alert.created_at)}</TableCell>
                   </TableRow>
                 ))

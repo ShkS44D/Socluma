@@ -17,7 +17,7 @@ class TriageOpsCollector:
         # Initialize platform-specific collector
         system = platform.system().lower()
         if system == "windows":
-            self.event_collector = WindowsEventCollector()
+            self.event_collector = WindowsEventCollector(api_client.config.WINDOWS_EVENT_CHANNELS)
         elif system == "linux":
             self.event_collector = LinuxEventCollector()
         else:
@@ -25,7 +25,12 @@ class TriageOpsCollector:
             self.event_collector = WindowsEventCollector()  # Use Windows simulator for any platform
     
     def start(self):
-        logger.info("Starting TriageOps collector...")
+        logger.info(
+            "Starting TriageOps collector (backend=%s collector_id=%s channels=%s)",
+            self.api_client.base_url,
+            self.api_client.config.COLLECTOR_ID,
+            ",".join(getattr(self.event_collector, "channels", [])) or "platform-default",
+        )
         self.heartbeat_service.start()
         
         try:
@@ -46,10 +51,11 @@ class TriageOpsCollector:
             try:
                 # Collect events
                 events = self.event_collector.collect_events()
-                
+                accepted = 0
+                rejected = 0
                 # Send events
                 for event in events:
-                    self.api_client.send_event(
+                    response = self.api_client.send_event(
                         source=event["source"],
                         event_type=event["event_type"],
                         raw_event=event["raw_event"],
@@ -57,7 +63,19 @@ class TriageOpsCollector:
                         severity=event.get("severity"),
                         timestamp=event.get("timestamp")
                     )
+                    if response is None:
+                        rejected += 1
+                    else:
+                        accepted += 1
                     time.sleep(0.1)  # Small delay to avoid overwhelming the backend
+                if events:
+                    logger.info(
+                        "Collection cycle completed (read=%s submitted=%s accepted=%s rejected=%s)",
+                        len(events),
+                        len(events),
+                        accepted,
+                        rejected,
+                    )
                     
             except Exception as e:
                 logger.error(f"Event collection loop error: {e}", exc_info=True)

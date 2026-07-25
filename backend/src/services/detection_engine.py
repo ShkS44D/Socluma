@@ -88,6 +88,18 @@ class DetectionEngine:
                 continue
                 
             match_result = self._match_rule(rule, event)
+            logger.info(
+                "Detection rule evaluated",
+                extra={
+                    "tenant_id": tenant_id,
+                    "event_id": event.id,
+                    "collector_id": (event.normalized_event or {}).get("collector_id"),
+                    "rule_id": rule.id,
+                    "rule_version": utc_isoformat(rule.updated_at or rule.created_at),
+                    "match_result": bool(match_result["matched"]),
+                    "failure_reason": None if match_result["matched"] else "logsource, field selection, or condition did not match",
+                },
+            )
             if match_result['matched']:
                 match = DetectionMatchModel(
                     tenant_id=tenant_id,
@@ -181,6 +193,9 @@ class DetectionEngine:
             **normalized_event,
             "raw_data": raw_event,
             "normalized_event": normalized_event,
+            "event_data": raw_event.get("EventData") or raw_event.get("event_data") or normalized_event.get("event_data") or {},
+            "source": event.source,
+            "event_type": event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
         }
         
         result = {'matched': False, 'matched_condition': None, 'why_matched': None}
@@ -207,11 +222,13 @@ class DetectionEngine:
                     return result
                 
             if rule.rule_type == RuleType.SIGMA and rule.rule_content:
-                matched, details = sigma_rule_service.match(rule.rule_content, combined_event)
+                explanation = sigma_rule_service.explain(rule.rule_content, combined_event)
+                matched, details = explanation["matched"], explanation["summary"]
                 if matched:
                     result['matched'] = True
                     result['matched_condition'] = str(rule.rule_content.get("detection", {}))
                     result['why_matched'] = details
+                    result['match_explanation'] = explanation
                     return result
 
             if rule.sigma_rule:
@@ -538,6 +555,19 @@ class DetectionEngine:
             "event_id": event.id,
             "created_at": utc_isoformat(alert.created_at)
         })
+        logger.info(
+            "Detection alert created",
+            extra={
+                "tenant_id": tenant_id,
+                "event_id": event.id,
+                "collector_id": (event.normalized_event or {}).get("collector_id"),
+                "rule_id": match.rule_id,
+                "rule_version": utc_isoformat(match.rule.updated_at or match.rule.created_at),
+                "alert_id": alert.id,
+                "incident_id": alert.incident_id,
+                "match_result": True,
+            },
+        )
         
         return alert
 
@@ -601,6 +631,7 @@ class DetectionEngine:
             "detection_rule": {
                 "id": rule.id,
                 "name": rule.name,
+                "version": utc_isoformat(rule.updated_at or rule.created_at),
                 "type": rule.rule_type.value if hasattr(rule.rule_type, "value") else str(rule.rule_type),
                 "description": rule.description,
                 "mitre_technique_id": rule.mitre_technique_id,
@@ -626,6 +657,21 @@ class DetectionEngine:
             "mitre_technique": mitre_techniques[0] if mitre_techniques else None,
             "matched_condition": match_result.get("matched_condition"),
             "why_matched": match_result.get("why_matched"),
+            "match_explanation": match_result.get("match_explanation"),
+            "pending_correlation": {
+                "status": "pending",
+                "reason": "This alert remains pending until qualifying related alerts satisfy deterministic correlation requirements.",
+                "minimum_related_alerts": 2,
+                "correlation_keys": {
+                    key: normalized_event.get(key) or raw_event.get(key)
+                    for key in (
+                        "hostname", "agent_id", "rule_id", "source_ip", "destination_ip",
+                        "source_host", "destination_host", "user",
+                    )
+                    if normalized_event.get(key) is not None or raw_event.get(key) is not None
+                },
+                "correlation_window_minutes": settings.CORRELATION_WINDOW_MINUTES,
+            },
             "false_positive_considerations": false_positives,
             "recommendations": recommendations,
         }

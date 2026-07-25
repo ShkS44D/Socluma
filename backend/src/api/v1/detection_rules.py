@@ -78,7 +78,7 @@ def import_sigma_rule(
         description=rule_content.get("description"),
         type=RuleType.SIGMA,
         rule_type=RuleType.SIGMA,
-        sigma_rule=sigma_rule_service.export_yaml(rule_content),
+        sigma_rule=payload.content,
         rule_content=rule_content,
         event_type=sigma_rule_service.infer_event_type(rule_content),
         severity=sigma_rule_service.infer_severity(rule_content),
@@ -141,9 +141,34 @@ def test_rule(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     result = detection_engine._match_rule(rule, _event_proxy(payload.event))
+    combined_event = {
+        **_event_proxy(payload.event).raw_event,
+        **_event_proxy(payload.event).normalized_event,
+        "raw_data": _event_proxy(payload.event).raw_event,
+        "normalized_event": _event_proxy(payload.event).normalized_event,
+        "event_data": (
+            _event_proxy(payload.event).raw_event.get("EventData")
+            or _event_proxy(payload.event).raw_event.get("event_data")
+            or {}
+        ),
+        "source": payload.event.get("source", "rule-tester"),
+        "event_type": payload.event.get("event_type"),
+    }
+    explanation = (
+        sigma_rule_service.explain(rule.rule_content, combined_event)
+        if rule.rule_type == RuleType.SIGMA and rule.rule_content
+        else {
+            "matched": bool(result.get("matched")),
+            "summary": str(result.get("why_matched") or ""),
+            "logsource": {"matched": True, "checks": [], "summary": "not applicable"},
+            "selections": [],
+            "condition": {"matched": bool(result.get("matched")), "details": str(result.get("why_matched") or "")},
+        }
+    )
     return DetectionRuleTestResponse(
         matched=bool(result.get("matched")),
         details=str(result.get("why_matched") or result.get("matched_condition") or ""),
+        explanation=explanation,
     )
 
 
@@ -169,7 +194,7 @@ def update_rule(
         )
         return DetectionRule.model_validate(rule)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 def _first_attack_tag(rule_content: dict) -> str | None:
@@ -187,6 +212,8 @@ def _event_proxy(event: dict):
     class EventProxy:
         raw_event = event.get("raw_event") or event.get("raw_data") or event
         normalized_event = event.get("normalized_event") or event.get("ocsf_data") or event
+        source = event.get("source", "rule-tester")
+        event_type = event.get("event_type")
 
     return EventProxy()
 

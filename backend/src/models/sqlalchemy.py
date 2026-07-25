@@ -455,6 +455,7 @@ class Alert(Base):
         Index("ix_alerts_tenant_severity_created_at", "tenant_id", "severity", "created_at"),
         Index("ix_alerts_correlation_candidates", "tenant_id", "incident_id", "status", "created_at"),
         Index("ix_alerts_tenant_event_id", "tenant_id", "event_id"),
+        UniqueConstraint("tenant_id", "event_id", "detection_rule_id", name="uq_alerts_tenant_event_rule"),
     )
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -1278,6 +1279,7 @@ class DetectionMatch(Base):
     __table_args__ = (
         Index("ix_detection_matches_tenant_rule_created_at", "tenant_id", "rule_id", "created_at"),
         Index("ix_detection_matches_tenant_event", "tenant_id", "event_id"),
+        UniqueConstraint("tenant_id", "event_id", "rule_id", name="uq_detection_matches_tenant_event_rule"),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

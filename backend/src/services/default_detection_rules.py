@@ -22,7 +22,6 @@ def _sigma(
         "description": description,
         "status": "stable",
         "logsource": {
-            "product": "windows" if event_type in {EventType.PROCESS, EventType.LOGIN, EventType.USER_CREATION} else "network",
             "category": "process_creation" if event_type == EventType.PROCESS else event_type.value,
         },
         "detection": detection,

@@ -42,6 +42,7 @@ class DetectionRuleService:
         
         # Initialize fields
         sigma_rule = rule_data.sigma_rule or ""
+        original_sigma_rule = sigma_rule
         query = rule_data.query or ""
         condition = rule_data.condition
         rule_content = rule_data.rule_content
@@ -58,7 +59,7 @@ class DetectionRuleService:
             if not validation.valid:
                 raise ValueError("; ".join(validation.errors))
             rule_content = validation.normalized
-            sigma_rule = sigma_rule_service.export_yaml(rule_content)
+            sigma_rule = original_sigma_rule or sigma_rule_service.export_yaml(rule_content)
             if not rule_data.event_type:
                 inferred_event_type = sigma_rule_service.infer_event_type(rule_content)
             else:
@@ -132,6 +133,7 @@ class DetectionRuleService:
             if not validation.valid:
                 raise ValueError("; ".join(validation.errors))
             update_dict['rule_content'] = validation.normalized
+            rule.sigma_rule = update_dict['sigma_rule']
 
         if 'rule_content' in update_dict and update_dict['rule_content']:
             rule_content = update_dict['rule_content']
@@ -141,7 +143,8 @@ class DetectionRuleService:
                     raise ValueError("; ".join(validation.errors))
                 rule_content = validation.normalized
                 rule.rule_content = rule_content
-                rule.sigma_rule = sigma_rule_service.export_yaml(rule_content)
+                if 'sigma_rule' not in update_dict:
+                    rule.sigma_rule = sigma_rule_service.export_yaml(rule_content)
                 if 'event_type' not in update_dict:
                     rule.event_type = sigma_rule_service.infer_event_type(rule_content)
                 if 'severity' not in update_dict:

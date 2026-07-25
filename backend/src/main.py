@@ -42,6 +42,7 @@ from src.models.pydantic import HealthCheck, HealthComponent, HealthStatus
 from src.utils.datetime_utils import get_utc_now
 from src.api.v1 import auth, alerts, incidents, sources, iocs, detection_rules, notifications, assets, events, mitre_techniques, websockets, log_sources, collectors, playbooks, soar, organizations, ai
 from src.services.default_detection_rules import DEFAULT_DETECTION_RULES
+from src.services.mitre_technique_service import mitre_technique_service
 from src.services.organization_service import organization_service
 
 settings = get_settings()
@@ -122,6 +123,26 @@ def bootstrap_default_detection_rules():
 
     except Exception:
         logger.exception("Failed to bootstrap default detection rules")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def bootstrap_mitre_catalog():
+    """Ensure deterministic correlation can resolve ATT&CK stage metadata."""
+    db = SessionLocal()
+    try:
+        result = mitre_technique_service.bootstrap_catalog(db)
+        logger.info(
+            "MITRE ATT&CK catalog bootstrap complete",
+            extra={
+                "catalog_records_created": result["created"],
+                "catalog_records_updated": result["updated"],
+                "catalog_records_total": result["total"],
+            },
+        )
+    except Exception:
+        logger.exception("Failed to bootstrap MITRE ATT&CK catalog")
         db.rollback()
     finally:
         db.close()
@@ -305,6 +326,9 @@ if settings.USE_SQLITE:
 
 # Bootstrap admin user on startup
 bootstrap_admin()
+
+# Correlation requires tactic metadata even on a freshly migrated database.
+bootstrap_mitre_catalog()
 
 # Bootstrap default detection rules on startup
 bootstrap_default_detection_rules()

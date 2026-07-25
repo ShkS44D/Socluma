@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, Button, Stack, Typography, Chip } from '@mui/material'
+import { Box, Button, Stack, Typography, Chip, TextField, Alert, Divider } from '@mui/material'
 import { ArrowBack as ArrowBackIcon, Edit as EditIcon } from '@mui/icons-material'
 import {
   PageHeader,
@@ -9,7 +9,7 @@ import {
   ErrorState,
   StatusChip
 } from '../components/ui'
-import { getDetectionRule, updateDetectionRule } from '../services/api/detectionRules'
+import { getDetectionRule, updateDetectionRule, testDetectionRule, RuleTestResult } from '../services/api/detectionRules'
 import { DetectionRule } from '../services/api/types'
 import { formatDateTimePKT } from '../utils/time'
 import DetectionRuleFormModal from '../components/detection-rules/DetectionRuleFormModal'
@@ -21,6 +21,26 @@ const DetectionRuleDetail: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [sampleEvent, setSampleEvent] = useState(JSON.stringify({
+    source: 'windows-agent',
+    event_type: 'file',
+    raw_event: {
+      EventID: 6416,
+      Channel: 'Security',
+      ProviderName: 'Microsoft-Windows-Security-Auditing',
+      Computer: 'analyst-workstation',
+      DeviceId: 'USBSTOR\\\\Disk&Ven_Example',
+      ClassName: 'DiskDrive'
+    },
+    normalized_event: {
+      product: 'windows',
+      channel: 'Security',
+      hostname: 'analyst-workstation'
+    }
+  }, null, 2))
+  const [testResult, setTestResult] = useState<RuleTestResult | null>(null)
+  const [testError, setTestError] = useState('')
+  const [testing, setTesting] = useState(false)
 
   const fetchRule = async () => {
     if (!ruleId) return
@@ -45,6 +65,21 @@ const DetectionRuleDetail: React.FC = () => {
     if (!ruleId) return
     await updateDetectionRule(ruleId, data)
     await fetchRule()
+  }
+
+  const handleTestRule = async () => {
+    if (!ruleId) return
+    setTestError('')
+    setTestResult(null)
+    setTesting(true)
+    try {
+      const event = JSON.parse(sampleEvent)
+      setTestResult(await testDetectionRule(ruleId, event))
+    } catch (err: any) {
+      setTestError(err?.response?.data?.detail || err.message || 'Rule test failed')
+    } finally {
+      setTesting(false)
+    }
   }
 
   if (loading) {
@@ -176,6 +211,60 @@ const DetectionRuleDetail: React.FC = () => {
           </Typography>
         </SectionCard>
       )}
+
+      <SectionCard title="Test Rule">
+        <Stack spacing={3}>
+          <Typography variant="body2" color="text.secondary">
+            Evaluate a sample event without storing an event or creating an alert.
+          </Typography>
+          <TextField
+            label="Sample Windows event (JSON)"
+            value={sampleEvent}
+            onChange={(event) => setSampleEvent(event.target.value)}
+            multiline
+            rows={12}
+            fullWidth
+            slotProps={{ input: { sx: { fontFamily: 'monospace', fontSize: '0.875rem' } } }}
+          />
+          <Box>
+            <Button variant="contained" onClick={handleTestRule} disabled={testing}>
+              {testing ? 'Testing…' : 'Run Test'}
+            </Button>
+          </Box>
+          {testError && <Alert severity="error">{testError}</Alert>}
+          {testResult && (
+            <Alert severity={testResult.matched ? 'success' : 'warning'}>
+              <Stack spacing={2}>
+                <Typography variant="h6">
+                  Final result: {testResult.matched ? 'MATCH' : 'NO MATCH'}
+                </Typography>
+                <Typography variant="body2">
+                  Logsource: {testResult.explanation.logsource.summary}
+                </Typography>
+                <Divider />
+                {testResult.explanation.selections.map((selection) => (
+                  <Box key={selection.name}>
+                    <Typography variant="subtitle2">
+                      {selection.name}: {selection.matched ? 'matched' : 'not matched'}
+                    </Typography>
+                    {selection.fields.map((field, index) => (
+                      <Typography variant="body2" key={`${selection.name}-${field.expression}-${index}`}>
+                        {field.expression}: expected {JSON.stringify(field.expected)}, found{' '}
+                        {JSON.stringify(field.actual)} from {field.resolved_from || 'unresolved'} —{' '}
+                        {field.matched ? 'matched' : 'not matched'}
+                      </Typography>
+                    ))}
+                  </Box>
+                ))}
+                <Divider />
+                <Typography variant="body2">
+                  Condition: {testResult.explanation.condition.details}
+                </Typography>
+              </Stack>
+            </Alert>
+          )}
+        </Stack>
+      </SectionCard>
 
       <DetectionRuleFormModal
         open={editModalOpen}

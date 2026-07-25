@@ -1,0 +1,30 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <System>
+    <Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-A5BA-3E3B0328C30D}" />
+    <EventID>6416</EventID>
+    <Version>0</Version>
+    <Level>0</Level>
+    <Task>13316</Task>
+    <Opcode>0</Opcode>
+    <Keywords>0x8020000000000000</Keywords>
+    <TimeCreated SystemTime="2026-07-25T10:45:00.1234567Z" />
+    <EventRecordID>9025000</EventRecordID>
+    <Execution ProcessID="4" ThreadID="1234" />
+    <Channel>Security</Channel>
+    <Computer>analyst-workstation</Computer>
+    <Security UserID="S-1-5-18" />
+  </System>
+  <EventData>
+    <Data Name="SubjectUserSid">S-1-5-18</Data>
+    <Data Name="SubjectUserName">SYSTEM</Data>
+    <Data Name="SubjectDomainName">WORKGROUP</Data>
+    <Data Name="SubjectLogonId">0x3e7</Data>
+    <Data Name="DeviceId">USBSTOR\Disk&amp;Ven_Example</Data>
+    <Data Name="DeviceDescription">USB Mass Storage Device</Data>
+    <Data Name="ClassId">{4d36e967-e325-11ce-bfc1-08002be10318}</Data>
+    <Data Name="ClassName">DiskDrive</Data>
+    <Data Name="VendorIds">USB\VID_1234</Data>
+    <Data Name="CompatibleIds">USBSTOR\Disk</Data>
+    <Data Name="LocationInformation">Port_#0001.Hub_#0001</Data>
+  </EventData>
+</Event>

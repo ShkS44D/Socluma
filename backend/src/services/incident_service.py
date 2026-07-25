@@ -89,6 +89,21 @@ class IncidentService:
             return owned_incident
         candidate = correlation_service.correlate_alert(db, alert)
         if not candidate.qualified or len({item.id for item in candidate.alerts}) < correlation_service.minimum_alerts:
+            ocsf_data = dict(alert.ocsf_data or {})
+            pending = dict(ocsf_data.get("pending_correlation") or {})
+            pending.update({
+                "status": "pending",
+                "reason": "; ".join(candidate.correlation_reasons)
+                or "More qualifying related alerts are required.",
+                "candidate_alert_ids": candidate.candidate_alert_ids or [],
+                "correlation_score": candidate.correlation_score,
+                "matched_identifiers": candidate.matched_identifiers or [],
+                "correlation_window_minutes": correlation_service.window_minutes,
+                "minimum_related_alerts": correlation_service.minimum_alerts,
+            })
+            ocsf_data["pending_correlation"] = pending
+            alert.ocsf_data = ocsf_data
+            db.add(alert)
             logger.info(
                 "Alert retained pending correlation",
                 extra={"tenant_id": alert.tenant_id, "alert_id": alert.id, "incident_id": None,

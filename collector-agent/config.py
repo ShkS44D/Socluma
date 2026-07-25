@@ -14,6 +14,13 @@ class Config:
     # Timing
     HEARTBEAT_INTERVAL_SECONDS: int = 60
     EVENT_POLL_INTERVAL_SECONDS: float = 2.0
+    WINDOWS_EVENT_CHANNELS: tuple[str, ...] = tuple(
+        channel.strip()
+        for channel in os.getenv(
+            "WINDOWS_EVENT_CHANNELS", "Security,System,Application"
+        ).split(",")
+        if channel.strip()
+    )
     
     @classmethod
     def validate_config(cls) -> bool:
@@ -24,5 +31,7 @@ class Config:
         if cls.HEARTBEAT_INTERVAL_SECONDS < 5:
             return False
         if cls.EVENT_POLL_INTERVAL_SECONDS < 0.5:
+            return False
+        if not cls.WINDOWS_EVENT_CHANNELS:
             return False
         return True

@@ -235,6 +235,62 @@ class DetectionPipelineTests(unittest.TestCase):
         image_event = image_ingest_response.json()
         self.assertEqual(len(image_event.get("detections")), 2)
 
+    def test_sigma_rule_usb_event_6416_creates_alert(self):
+        create_rule_response = self.client.post(
+            "/api/v1/detection-rules",
+            json={
+                "name": "USB storage device connected",
+                "description": "Detect Windows Plug and Play storage-device recognition",
+                "rule_type": "sigma",
+                "severity": "medium",
+                "rule_content": {
+                    "title": "USB storage device connected",
+                    "logsource": {"product": "windows", "service": "security"},
+                    "detection": {
+                        "selection": {
+                            "EventID": 6416,
+                            "ClassName": "DiskDrive",
+                        },
+                        "condition": "selection",
+                    },
+                },
+            },
+        )
+        self.assertEqual(create_rule_response.status_code, 201, create_rule_response.text)
+
+        ingest_response = self.client.post(
+            "/api/v1/events/ingest",
+            json={
+                "source": "windows-agent",
+                "event_type": "file",
+                "raw_event": {
+                    "EventID": 6416,
+                    "event_id": 6416,
+                    "DeviceId": r"USBSTOR\DISK&VEN_TEST",
+                    "DeviceDescription": "USB Mass Storage Device",
+                    "ClassName": "DiskDrive",
+                    "Computer": "analyst-workstation",
+                    "Channel": "Security",
+                },
+                "normalized_event": {
+                    "event_id": 6416,
+                    "device_id": r"USBSTOR\DISK&VEN_TEST",
+                    "device_description": "USB Mass Storage Device",
+                    "device_class_name": "DiskDrive",
+                    "hostname": "analyst-workstation",
+                    "channel": "Security",
+                    "product": "windows",
+                },
+            },
+        )
+
+        self.assertEqual(ingest_response.status_code, 201, ingest_response.text)
+        event = ingest_response.json()
+        self.assertTrue(event["processed"])
+        self.assertEqual(len(event["detections"]), 1)
+        self.assertFalse(event["incident_created"])
+        self.assertIsNone(event["incident_id"])
+
     def test_events_today_stats_counts_beyond_default_page_limit(self):
         for index in range(111):
             response = self.client.post(

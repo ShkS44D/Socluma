@@ -1107,6 +1107,7 @@ class DetectionRuleTestRequest(BaseModel):
 class DetectionRuleTestResponse(BaseModel):
     matched: bool
     details: str
+    explanation: Dict[str, Any]
 
 
 # Security Event Schemas

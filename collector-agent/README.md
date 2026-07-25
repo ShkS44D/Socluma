@@ -5,6 +5,11 @@ The TriageOps collector agent sends host telemetry and heartbeat updates to the 
 ## Supported Platforms
 
 - Windows: Windows Security Event Log collection when `pywin32` is available.
+  Security events are forwarded with `EventID`, host metadata, record number,
+  and the event's string inserts so tenant-authored detection rules can match
+  fields exposed by Windows. Event 6416 is additionally normalized with Plug
+  and Play device fields such as `DeviceId`, `DeviceDescription`, and
+  `ClassName`.
 - Linux: auth/syslog collection where readable.
 - Other platforms: simulated development events.
 
@@ -49,6 +54,17 @@ The collector:
 - Use HTTPS and normal certificate validation.
 - Store the collector token in the host secret store or service manager, not in source control.
 - Monitor collector logs for heartbeat or ingestion failures.
+- Run the Windows collector with permission to read the Security event log.
+  Windows must also have the relevant audit subcategory enabled. For USB/Plug
+  and Play event 6416, enable successful Plug and Play auditing:
+
+  ```powershell
+  auditpol /set /subcategory:"Plug and Play Events" /success:enable
+  ```
+
+  A matching rule creates an alert. A single alert can remain pending because
+  normal incidents require qualifying related alerts under the correlation
+  policy.
 
 ## Rotate Collector Credentials
 

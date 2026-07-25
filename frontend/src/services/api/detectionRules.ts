@@ -57,12 +57,51 @@ export const exportDetectionRule = async (ruleId: string): Promise<string> => {
 export const testDetectionRule = async (
   ruleId: string,
   event: Record<string, any>
-): Promise<{ matched: boolean; details: string }> => {
-  const response = await api.post<{ matched: boolean; details: string }>(
+): Promise<RuleTestResult> => {
+  const response = await api.post<RuleTestResult>(
     `/api/v1/detection-rules/${ruleId}/test`,
     { event }
   )
   return response.data
+}
+
+export interface RuleTestFieldResult {
+  field: string
+  expression: string
+  resolved_from?: string | null
+  actual?: unknown
+  expected?: unknown
+  matched: boolean
+}
+
+export interface RuleTestResult {
+  matched: boolean
+  details: string
+  explanation: {
+    matched: boolean
+    summary: string
+    logsource: {
+      matched: boolean
+      summary: string
+      checks: Array<{
+        field: string
+        expected: unknown
+        actual?: unknown
+        source?: string | null
+        matched: boolean
+      }>
+    }
+    selections: Array<{
+      name: string
+      matched: boolean
+      fields: RuleTestFieldResult[]
+    }>
+    condition: {
+      expression?: string
+      matched: boolean
+      details: string
+    }
+  }
 }
 
 export const updateDetectionRule = async (
