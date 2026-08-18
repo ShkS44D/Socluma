@@ -14,6 +14,10 @@ class Config:
     # Timing
     HEARTBEAT_INTERVAL_SECONDS: int = 60
     EVENT_POLL_INTERVAL_SECONDS: float = 2.0
+    BATCH_SIZE: int = int(os.getenv("BATCH_SIZE", "100"))
+    SPOOL_PATH: str = os.getenv("SPOOL_PATH", "./data/event-spool.db")
+    SPOOL_MAX_BYTES: int = int(os.getenv("SPOOL_MAX_BYTES", "268435456"))
+    CHECKPOINT_PATH: str = os.getenv("CHECKPOINT_PATH", "./data/checkpoints.json")
     WINDOWS_EVENT_CHANNELS: tuple[str, ...] = tuple(
         channel.strip()
         for channel in os.getenv(

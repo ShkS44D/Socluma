@@ -23,6 +23,7 @@ import {
 } from '@mui/material'
 import { Add, History, Visibility } from '@mui/icons-material'
 import { ActionConnector, ConnectorType, createConnector, listConnectors } from '../services/api'
+import { usePermissionStore } from '../store'
 
 const connectorTypes: ConnectorType[] = ['webhook', 'slack', 'teams', 'smtp_email', 'generic_rest']
 
@@ -34,6 +35,7 @@ const Connectors: React.FC = () => {
   const [config, setConfig] = useState('{"url":"https://example.com/webhook"}')
   const [requiresApproval, setRequiresApproval] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const can = usePermissionStore((state) => state.can)
 
   const load = async () => {
     try {
@@ -73,9 +75,9 @@ const Connectors: React.FC = () => {
           <Button component={RouterLink} to="/soar/actions" startIcon={<History />}>
             Action History
           </Button>
-          <Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>
+          {can('soar.manage') && <Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>
             New Connector
-          </Button>
+          </Button>}
         </Stack>
       </Box>
       {error && <Alert severity="error">{error}</Alert>}

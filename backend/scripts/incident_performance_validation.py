@@ -418,7 +418,7 @@ def verify_copilot_idempotency(
         completed = next((response for response in initial_responses if response.status_code == 200), None)
         if completed is None:
             raise RuntimeError(
-                f"No idempotent Copilot caller completed: {[item.status_code for item in initial_responses]}"
+                f"No idempotent Triage AI caller completed: {[item.status_code for item in initial_responses]}"
             )
         completed_body = completed.json()
         attempts_after_initial = provider_attempts

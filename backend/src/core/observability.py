@@ -32,6 +32,34 @@ COLLECTOR_EVENTS = Counter(
     "Collector event ingestion submissions.",
     ["source"],
 )
+INGESTION_BATCHES = Counter(
+    "triageops_ingestion_batches_total",
+    "Telemetry batch outcomes.",
+    ["outcome"],
+)
+INGESTION_EVENT_OUTCOMES = Counter(
+    "triageops_ingestion_event_outcomes_total",
+    "Per-event telemetry ingestion outcomes.",
+    ["outcome"],
+)
+INGESTION_BATCH_SIZE = Histogram(
+    "triageops_ingestion_batch_size",
+    "Events submitted per telemetry batch.",
+)
+INGESTION_QUALITY = Histogram(
+    "triageops_ingestion_quality_score",
+    "Normalized telemetry data quality score.",
+    buckets=(0, 25, 50, 75, 90, 100),
+)
+INGESTION_LAG = Histogram(
+    "triageops_ingestion_lag_seconds",
+    "Telemetry event-time to receive-time lag.",
+)
+INGESTION_DEAD_LETTER = Counter(
+    "triageops_ingestion_dead_letter_total",
+    "Telemetry records moved to dead-letter state.",
+    ["stage", "error_code"],
+)
 DETECTION_EXECUTIONS = Counter(
     "triageops_detection_executions_total",
     "Detection engine executions.",
@@ -120,36 +148,36 @@ INCIDENT_EXPLANATIONS = Counter(
 )
 COPILOT_REQUESTS = Counter(
     "triageops_copilot_requests_total",
-    "Incident Copilot requests.",
+    "Triage AI incident requests.",
     ["provider", "outcome"],
 )
 COPILOT_RESPONSE_LATENCY = Histogram(
     "triageops_copilot_response_duration_seconds",
-    "Incident Copilot response latency.",
+    "Triage AI incident response latency.",
     ["provider", "fallback_used"],
 )
 COPILOT_PROVIDER_FAILURES = Counter(
     "triageops_copilot_provider_failures_total",
-    "External Copilot provider failures.",
+    "External Triage AI provider failures.",
     ["provider"],
 )
 COPILOT_FALLBACK_USAGE = Counter(
     "triageops_copilot_fallback_total",
-    "Deterministic Copilot fallback usage.",
+    "Deterministic Triage AI fallback usage.",
     ["reason"],
 )
 COPILOT_EVIDENCE_REFERENCES = Histogram(
     "triageops_copilot_evidence_references",
-    "Evidence references returned per Copilot response.",
+    "Evidence references returned per Triage AI response.",
 )
 COPILOT_TOKENS = Counter(
     "triageops_copilot_tokens_total",
-    "OpenAI Copilot tokens by normalized usage category.",
+    "OpenAI token usage for Triage AI by normalized category.",
     ["provider", "type"],
 )
 COPILOT_CONVERSATIONS = Counter(
     "triageops_copilot_conversations_total",
-    "Incident Copilot conversations created.",
+    "Triage AI incident conversations created.",
 )
 INCIDENT_CORRELATION_CONFIDENCE = Histogram(
     "triageops_incident_correlation_confidence",

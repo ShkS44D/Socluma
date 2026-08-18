@@ -3,6 +3,7 @@ import {
   DetectionRule,
   DetectionRuleCreate,
   DetectionRuleUpdate,
+  DetectionRuleVersion,
   Severity
 } from './types'
 
@@ -114,4 +115,60 @@ export const updateDetectionRule = async (
 
 export const deleteDetectionRule = async (ruleId: string): Promise<void> => {
   await api.delete(`/api/v1/detection-rules/${ruleId}`)
+}
+
+export const getDetectionRuleVersions = async (ruleId: string): Promise<DetectionRuleVersion[]> => {
+  const response = await api.get<DetectionRuleVersion[]>(
+    `/api/v1/detection-engineering/rules/${ruleId}/versions`
+  )
+  return response.data
+}
+
+export const transitionDetectionVersion = async (
+  versionId: string,
+  target: string,
+  comment?: string,
+  reviewerId?: string
+): Promise<DetectionRuleVersion> => {
+  const response = await api.post<DetectionRuleVersion>(
+    `/api/v1/detection-engineering/versions/${versionId}/transition`,
+    { target, comment, reviewer_id: reviewerId }
+  )
+  return response.data
+}
+
+export const getDetectionAnalytics = async (): Promise<{ rules: Array<Record<string, any>>; missing_feedback_behavior: string }> => {
+  const response = await api.get('/api/v1/detection-engineering/analytics')
+  return response.data
+}
+
+export const getMitreDetectionCoverage = async (): Promise<{ coverage: Array<Record<string, any>>; limitations: string }> => {
+  const response = await api.get('/api/v1/detection-engineering/mitre-coverage')
+  return response.data
+}
+
+export const getDetectionExceptions = async (): Promise<Array<Record<string, any>>> => {
+  const response = await api.get('/api/v1/detection-engineering/exceptions')
+  return response.data
+}
+
+export const getDetectionMaintenanceWindows = async (): Promise<Array<Record<string, any>>> => {
+  const response = await api.get('/api/v1/detection-engineering/maintenance-windows')
+  return response.data
+}
+
+export const getDetectionContentPacks = async (): Promise<Array<Record<string, any>>> => {
+  const response = await api.get('/api/v1/detection-engineering/content-packs')
+  return response.data
+}
+
+export const importDetectionContentPack = async (
+  manifest: Record<string, any>,
+  dryRun = true
+): Promise<Record<string, any>> => {
+  const response = await api.post('/api/v1/detection-engineering/content-packs/import', {
+    manifest,
+    dry_run: dryRun,
+  })
+  return response.data
 }

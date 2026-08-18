@@ -34,7 +34,7 @@ const IncidentOriginPanel: React.FC<IncidentOriginPanelProps> = ({ explanation, 
   return (
     <SectionCard
       title="How This Incident Was Created"
-      action={<Button variant="contained" onClick={onOpenCopilot}>Investigate with Copilot</Button>}
+      action={<Button variant="contained" onClick={onOpenCopilot}>Investigate with Triage AI</Button>}
     >
       <Stack spacing={4}>
         <Box

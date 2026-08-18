@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from src.api.deps import get_db, get_current_user, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import MitreTechnique, MitreTechniqueCreate
-from src.models.sqlalchemy import MitreTactic, User, UserRole
+from src.models.sqlalchemy import MitreTactic, User
 from src.services.mitre_technique_service import mitre_technique_service
 
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/mitre-techniques", tags=["MITRE Techniques"])
 def create_technique(
     technique_data: MitreTechniqueCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_UPDATE)),
 ):
     technique = mitre_technique_service.create_technique(db, technique_data)
     return MitreTechnique.model_validate(technique)
@@ -25,7 +26,7 @@ def create_technique(
 def list_techniques(
     tactic: Optional[MitreTactic] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     techniques = mitre_technique_service.list_techniques(db, tactic=tactic)
     return [MitreTechnique.model_validate(technique) for technique in techniques]
@@ -35,7 +36,7 @@ def list_techniques(
 def get_technique(
     technique_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     try:
         technique = mitre_technique_service.get_technique_by_id(db, technique_id)

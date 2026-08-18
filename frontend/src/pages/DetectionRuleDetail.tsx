@@ -9,15 +9,18 @@ import {
   ErrorState,
   StatusChip
 } from '../components/ui'
-import { getDetectionRule, updateDetectionRule, testDetectionRule, RuleTestResult } from '../services/api/detectionRules'
-import { DetectionRule } from '../services/api/types'
+import { getDetectionRule, getDetectionRuleVersions, transitionDetectionVersion, updateDetectionRule, testDetectionRule, RuleTestResult } from '../services/api/detectionRules'
+import { DetectionRule, DetectionRuleVersion } from '../services/api/types'
 import { formatDateTimePKT } from '../utils/time'
 import DetectionRuleFormModal from '../components/detection-rules/DetectionRuleFormModal'
+import { usePermissionStore } from '../store'
 
 const DetectionRuleDetail: React.FC = () => {
   const { ruleId } = useParams<{ ruleId: string }>()
   const navigate = useNavigate()
   const [rule, setRule] = useState<DetectionRule | null>(null)
+  const [versions, setVersions] = useState<DetectionRuleVersion[]>([])
+  const can = usePermissionStore((state) => state.can)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -49,6 +52,7 @@ const DetectionRuleDetail: React.FC = () => {
       setError('')
       const data = await getDetectionRule(ruleId)
       setRule(data)
+      setVersions(await getDetectionRuleVersions(ruleId))
     } catch (err) {
       setError('Failed to load detection rule')
       console.error(err)
@@ -113,13 +117,13 @@ const DetectionRuleDetail: React.FC = () => {
             >
               Back
             </Button>
-            <Button
+            {can('detections.update') && <Button
               variant="contained"
               startIcon={<EditIcon />}
               onClick={() => setEditModalOpen(true)}
             >
               Edit Rule
-            </Button>
+            </Button>}
           </Stack>
         }
       />
@@ -157,6 +161,12 @@ const DetectionRuleDetail: React.FC = () => {
               </Typography>
               <Chip label={rule.type} />
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Lifecycle
+              </Typography>
+              <StatusChip label={rule.lifecycle_status || 'legacy'} />
+            </Box>
           </Stack>
           <Box>
             <Typography variant="caption" color="text.secondary" display="block">
@@ -174,6 +184,40 @@ const DetectionRuleDetail: React.FC = () => {
               {formatDateTimePKT(rule.updated_at)}
             </Typography>
           </Box>
+        </Stack>
+      </SectionCard>
+
+      <SectionCard title="Version History">
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            Production always executes an exact immutable version. Editing creates a new draft.
+          </Typography>
+          {versions.length === 0 && <Alert severity="info">No version history is available.</Alert>}
+          {versions.map((version) => (
+            <Box key={version.id} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+                <Typography variant="subtitle2">Version {version.version_number}</Typography>
+                <StatusChip label={version.lifecycle_status} />
+                <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                  {version.content_hash.slice(0, 12)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Validation: {version.validation_result?.valid === false ? 'failed' : 'passed'} · Tests: {version.test_result?.status || 'not run'}
+                </Typography>
+                <Box sx={{ flex: 1 }} />
+                {version.lifecycle_status === 'draft' && can('detections.validate') && (
+                  <Button size="small" onClick={async () => {
+                    await transitionDetectionVersion(version.id, 'validating')
+                    await fetchRule()
+                  }}>
+                    Validate
+                  </Button>
+                )}
+              </Stack>
+              {version.change_summary && <Typography variant="body2" sx={{ mt: 1 }}>{version.change_summary}</Typography>}
+              <Typography variant="caption" color="text.secondary">{formatDateTimePKT(version.created_at)}</Typography>
+            </Box>
+          ))}
         </Stack>
       </SectionCard>
 

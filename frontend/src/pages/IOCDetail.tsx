@@ -109,6 +109,9 @@ const IOCDetail: React.FC = () => {
               color={ioc.is_active ? 'success' : 'default'}
             />
             <Chip label={`Confidence: ${ioc.confidence_score}%`} />
+            <Chip label={`Reliability: ${ioc.source_reliability}%`} />
+            <Chip label={`Risk: ${ioc.risk_score}/100`} color={ioc.risk_score >= 70 ? 'error' : 'default'} />
+            <Chip label={ioc.tlp} color={ioc.tlp === 'TLP:RED' ? 'error' : 'warning'} />
           </Box>
           <Typography variant="body1">
             <strong>Value:</strong> {ioc.value}
@@ -141,6 +144,20 @@ const IOCDetail: React.FC = () => {
           <Typography variant="body2" color="text.secondary">
             Last updated: {formatDateTimePKT(ioc.updated_at)}
           </Typography>
+        </Stack>
+      </SectionCard>
+
+      <SectionCard title="Operational Risk">
+        <Stack spacing={1}>
+          {ioc.risk_reasons.length === 0 ? (
+            <Typography color="text.secondary">No risk contributions are currently recorded.</Typography>
+          ) : ioc.risk_reasons.map((reason, index) => (
+            <Box key={`${reason.factor}-${index}`} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+              <Typography variant="body2">{reason.explanation}</Typography>
+              <Chip size="small" label={`${reason.contribution >= 0 ? '+' : ''}${reason.contribution}`} />
+            </Box>
+          ))}
+          <Typography variant="caption" color="text.secondary">Score model version: {ioc.risk_score_version}</Typography>
         </Stack>
       </SectionCard>
 
@@ -182,11 +199,11 @@ const IOCDetail: React.FC = () => {
                 <Typography variant="caption" color="text.secondary">
                   Enriched: {formatDateTimePKT(enrichment.created_at)}
                 </Typography>
-                {enrichment.raw_response && (
+                {Object.keys(enrichment.safe_result || {}).length > 0 && (
                   <>
                     <Divider sx={{ my: 2 }} />
                     <Typography variant="subtitle2" gutterBottom>
-                      Raw Response
+                      Safe normalized provider result
                     </Typography>
                     <Box
                       sx={{
@@ -198,7 +215,7 @@ const IOCDetail: React.FC = () => {
                         overflowX: 'auto',
                       }}
                     >
-                      <pre>{JSON.stringify(enrichment.raw_response, null, 2)}</pre>
+                      <pre>{JSON.stringify(enrichment.safe_result, null, 2)}</pre>
                     </Box>
                   </>
                 )}

@@ -18,6 +18,7 @@ class WindowsEventCollector:
         self.last_processed_marker: Optional[Tuple[int, int]] = None
         self.channels = tuple(channels or ("Security", "System", "Application"))
         self.channel_cursors: Dict[str, int] = {}
+        self._unavailable_channels: set[str] = set()
         self._security_log_warning_emitted = False
         self.is_windows = platform.system().lower() == "windows"
         if self.is_windows:
@@ -94,11 +95,14 @@ class WindowsEventCollector:
                     self.channel_cursors.get(channel),
                 )
             except Exception as exc:
-                logger.warning(
-                    "Windows event channel unavailable (channel=%s error=%s)",
-                    channel,
-                    exc,
-                )
+                if channel not in self._unavailable_channels:
+                    logger.warning(
+                        "Windows event channel unavailable (channel=%s error=%s). "
+                        "This warning will not repeat until the collector restarts.",
+                        channel,
+                        exc,
+                    )
+                    self._unavailable_channels.add(channel)
             finally:
                 if query_handle is not None and hasattr(self.win32evtlog, "EvtClose"):
                     self.win32evtlog.EvtClose(query_handle)

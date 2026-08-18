@@ -2,6 +2,8 @@ import requests
 import json
 import time
 import uuid
+import hashlib
+import hmac
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from requests.adapters import HTTPAdapter
@@ -99,10 +101,10 @@ class TriageOpsAPIClient:
         finally:
             reset_request_id(request_token)
     
-    def send_heartbeat(self) -> Optional[Dict[str, Any]]:
+    def send_heartbeat(self, diagnostics: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/api/v1/collectors/{self.config.COLLECTOR_ID}/heartbeat"
         try:
-            response = self._post(url)
+            response = self._post(url, diagnostics or {})
             response.raise_for_status()
             logger.info("Heartbeat sent successfully")
             return response.json()
@@ -110,15 +112,85 @@ class TriageOpsAPIClient:
             status_code = e.response.status_code if e.response is not None else "unknown"
             response_text = e.response.text if e.response is not None else ""
             if status_code == 401:
-                logger.error("Collector authentication failed")
+                logger.error("Collector authentication failed; rotate or re-enroll this collector and replace COLLECTOR_TOKEN")
             elif status_code == 403:
                 logger.error("Collector token is valid but is not authorized for this collector ID")
             else:
                 logger.error("Heartbeat failed with HTTP %s: %s", status_code, response_text)
             return None
+
+    def send_batch(self, events: list[Dict[str, Any]], batch_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        url = f"{self.base_url}/api/v1/events/ingest/batch"
+        payload = {"batch_id": batch_id or str(uuid.uuid4()), "events": events}
+        try:
+            timestamp = str(int(time.time()))
+            nonce = str(uuid.uuid4())
+            # Sign the same canonical representation produced by the backend's
+            # validated request model. Pydantic serializes UTC as ``Z`` while
+            # Windows events commonly arrive with a ``+00:00`` suffix.
+            canonical_payload = self._canonical_batch_payload(payload)
+            body_hash = hashlib.sha256(
+                json.dumps(
+                    canonical_payload,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest()
+            material = f"{timestamp}.{nonce}.{payload['batch_id']}.{body_hash}".encode()
+            signature = hmac.new(self.config.COLLECTOR_TOKEN.encode(), material, hashlib.sha256).hexdigest()
+            original = dict(self.session.headers)
+            self.session.headers.update({
+                "X-Ingestion-Timestamp": timestamp,
+                "X-Ingestion-Nonce": nonce,
+                "X-Ingestion-Signature": signature,
+            })
+            try:
+                response = self._post(url, payload)
+            finally:
+                self.session.headers.clear()
+                self.session.headers.update(original)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else "unknown"
+            error_code = ""
+            if exc.response is not None:
+                try:
+                    detail = exc.response.json().get("detail", {})
+                    error_code = detail.get("error_code", "") if isinstance(detail, dict) else ""
+                except (ValueError, AttributeError):
+                    error_code = ""
+            if status_code == 401:
+                if error_code in {
+                    "INVALID_SIGNATURE",
+                    "INCOMPLETE_SIGNATURE",
+                    "INVALID_SIGNATURE_TIME",
+                    "SIGNATURE_EXPIRED",
+                }:
+                    logger.error("Batch signature was rejected (%s); verify collector/backend clock and signing versions", error_code)
+                else:
+                    logger.error("Batch authentication failed; rotate or re-enroll this collector and replace COLLECTOR_TOKEN")
+            elif status_code == 403:
+                logger.error("Collector token is not authorized for configured COLLECTOR_ID")
+            else:
+                logger.error("Batch failed with HTTP %s", status_code)
+            return None
+        except requests.exceptions.RequestException as exc:
+            logger.error("Batch request failed: %s", exc)
+            return None
         except requests.exceptions.RequestException as e:
             logger.error("Heartbeat request failed: %s", e)
             return None
+
+    @staticmethod
+    def _canonical_batch_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+        canonical = json.loads(json.dumps(payload, default=str))
+        for event in canonical.get("events", []):
+            timestamp = event.get("timestamp")
+            if isinstance(timestamp, str) and timestamp.endswith("+00:00"):
+                event["timestamp"] = f"{timestamp[:-6]}Z"
+        return canonical
     
     def send_event(self, source: str, event_type: str, raw_event: Dict[str, Any], 
                    normalized_event: Optional[Dict[str, Any]] = None, 

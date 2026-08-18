@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/ui'
 
 const cards = [
-  ['Incident Copilot', '/ai/incident-copilot', 'Ask incident-scoped questions and generate summaries.'],
+  ['Triage AI', '/ai/incident-copilot', 'Ask incident-scoped questions and generate summaries.'],
   ['AI Reports', '/ai/reports', 'Generate executive and technical incident reports.'],
   ['Timeline Viewer', '/ai/timeline', 'Build an investigation timeline from incident evidence.'],
   ['Alert Explanation', '/ai/alert-explanation', 'Explain why an alert triggered and how to triage it.'],
@@ -17,7 +17,7 @@ const AICopilotDashboard: React.FC = () => {
   const navigate = useNavigate()
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
-      <PageHeader title="AI Copilot" description="Tenant-scoped investigation assistance for SOC analysts" />
+      <PageHeader title="Triage AI" description="Tenant-scoped investigation assistance for SOC analysts" />
       <Grid container spacing={3} sx={{ mt: 1 }}>
         {cards.map(([title, path, description]) => (
           <Grid item xs={12} md={6} lg={4} key={path}>

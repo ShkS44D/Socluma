@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
-from src.api.deps import get_db, get_current_user, require_roles
-from src.models.sqlalchemy import User, UserRole
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
+from src.models.sqlalchemy import User
 from src.models.pydantic import (
     LogSource, LogSourceCreate, LogSourceUpdate
 )
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/log-sources", tags=["Log Sources"])
 @router.get("", response_model=List[LogSource])
 def list_log_sources(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Permission.COLLECTORS_VIEW))
 ):
     from src.models.sqlalchemy import LogSource as LogSourceModel
     return db.query(LogSourceModel).filter(
@@ -26,7 +27,7 @@ def list_log_sources(
 def create_log_source(
     log_source: LogSourceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))
+    current_user: User = Depends(require_permission(Permission.COLLECTORS_MANAGE))
 ):
     from src.models.sqlalchemy import LogSource as LogSourceModel
     db_log_source = LogSourceModel(
@@ -53,7 +54,7 @@ def update_log_source(
     log_source_id: str,
     log_source_update: LogSourceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))
+    current_user: User = Depends(require_permission(Permission.COLLECTORS_MANAGE))
 ):
     from src.models.sqlalchemy import LogSource as LogSourceModel
     db_log_source = db.query(LogSourceModel).filter(

@@ -38,7 +38,6 @@ from src.models.sqlalchemy import (
     SOARActionApproval,
     SOARApprovalStatus,
     User,
-    UserRole,
 )
 from src.utils.datetime_utils import ensure_utc
 
@@ -106,6 +105,7 @@ class SOARActionService:
             connector_id=connector.id,
             name=data.name,
             encrypted_secret=encrypt_json_secret(data.secret),
+            encryption_key_version=get_settings().ENCRYPTION_CURRENT_KEY_VERSION,
             secret_fingerprint=fingerprint_secret(data.secret),
             status=CredentialStatus.ACTIVE,
             created_by=user_id,
@@ -131,6 +131,7 @@ class SOARActionService:
         if data.secret is not None:
             connector_registry.get(credential.connector.type.value).validate(credential.connector.config, data.secret)
             credential.encrypted_secret = encrypt_json_secret(data.secret)
+            credential.encryption_key_version = get_settings().ENCRYPTION_CURRENT_KEY_VERSION
             credential.secret_fingerprint = fingerprint_secret(data.secret)
             credential.rotated_at = self._utcnow()
         credential.updated_by = user_id
@@ -320,8 +321,9 @@ class SOARActionService:
         approval = self._require_approval(db, tenant_id, approval_id)
         if approval.status != SOARApprovalStatus.PENDING:
             raise ValueError("Approval has already been decided")
-        if approval.required_role and not self._role_allows(user.role, approval.required_role):
-            raise ValueError("Approver role is not sufficient")
+        # The API and reusable authorization dependency enforce ``soar.approve``.
+        # ``required_role`` is retained only for backward-compatible display of
+        # approvals created before granular permissions became authoritative.
         approval.status = SOARApprovalStatus.APPROVED
         approval.decided_by = user.id
         approval.decision_comment = comment
@@ -407,7 +409,7 @@ class SOARActionService:
         data: ConnectorExecutionCreate,
         user_id: Optional[str],
     ) -> None:
-        roles = data.approval_roles or [UserRole(role) for role in (connector.approval_roles or [])] or [UserRole.ADMIN]
+        roles = data.approval_roles or list(connector.approval_roles or []) or [None]
         timeout_minutes = int((data.retry_policy or {}).get("approval_timeout_minutes", 60))
         expires_at = self._utcnow() + timedelta(minutes=timeout_minutes)
         for role in roles:
@@ -429,10 +431,6 @@ class SOARActionService:
         if not approval:
             raise ValueError("Approval not found")
         return approval
-
-    def _role_allows(self, actual: UserRole, required: UserRole) -> bool:
-        order = {UserRole.VIEWER: 0, UserRole.RESPONDER: 1, UserRole.ANALYST: 2, UserRole.ADMIN: 3}
-        return order[actual] >= order[required]
 
     def _log(self, db: Session, execution: ConnectorActionExecution, level: str, message: str, data: Optional[dict[str, Any]] = None) -> None:
         db.add(

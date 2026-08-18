@@ -28,6 +28,7 @@ import {
   Playbook,
   PlaybookTriggerType,
 } from '../services/api'
+import { usePermissionStore } from '../store'
 
 const triggerTypes: PlaybookTriggerType[] = [
   'manual_run',
@@ -46,6 +47,7 @@ const Playbooks: React.FC = () => {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [triggerType, setTriggerType] = useState<PlaybookTriggerType>('manual_run')
+  const can = usePermissionStore((state) => state.can)
 
   const loadPlaybooks = async () => {
     setLoading(true)
@@ -101,9 +103,9 @@ const Playbooks: React.FC = () => {
     <Stack spacing={3}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
         <Typography variant="h4">Playbooks</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>
+        {can('playbooks.create') && <Button variant="contained" startIcon={<Add />} onClick={() => setOpen(true)}>
           New Playbook
-        </Button>
+        </Button>}
       </Box>
 
       {error && <Alert severity="error">{error}</Alert>}
@@ -135,9 +137,9 @@ const Playbooks: React.FC = () => {
                 <TableCell>{new Date(playbook.updated_at).toLocaleString()}</TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Button size="small" startIcon={<PlayArrow />} onClick={() => handleRun(playbook.id)}>
+                    {can('playbooks.execute') && <Button size="small" startIcon={<PlayArrow />} onClick={() => handleRun(playbook.id)}>
                       Run
-                    </Button>
+                    </Button>}
                     <Button size="small" startIcon={<Visibility />} component={RouterLink} to={`/playbooks/${playbook.id}`}>
                       Open
                     </Button>

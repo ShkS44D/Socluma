@@ -49,9 +49,12 @@ class WebSocketService {
       return
     }
 
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
-    const wsProtocol = apiBaseUrl.startsWith('https') ? 'wss' : 'ws'
-    const wsUrl = `${wsProtocol}://${apiBaseUrl.replace(/^https?:\/\//, '')}/api/v1/ws/${this.tenantId}?token=${token}`
+    const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
+    const httpUrl = new URL(configuredBaseUrl, window.location.origin)
+    httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+    httpUrl.pathname = `${httpUrl.pathname.replace(/\/$/, '')}/api/v1/ws/${this.tenantId}`
+    httpUrl.search = new URLSearchParams({ token }).toString()
+    const wsUrl = httpUrl.toString()
 
     this.ws = new WebSocket(wsUrl)
 

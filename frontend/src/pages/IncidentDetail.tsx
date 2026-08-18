@@ -23,8 +23,7 @@ import {
   getIncidentIOCs,
   enrichIncidentIOC,
 } from '../services/api'
-import { useAuthStore } from '../store'
-import { canAccess, PERMISSIONS } from '../utils/permissions'
+import { usePermissionStore } from '../store'
 import toast from 'react-hot-toast'
 import {
   IncidentHeader,
@@ -58,8 +57,8 @@ const IncidentDetail: React.FC = () => {
   const [alertsLoading, setAlertsLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const user = useAuthStore((state) => state.user)
-  const canAnalyze = canAccess(user?.role ?? null, PERMISSIONS.analyzeIncidents as { requiredRole: import('../utils/permissions').UserRole })
+  const can = usePermissionStore((state) => state.can)
+  const canAnalyze = can('incidents.update') && can('triage_ai.use')
 
   const evidence: ThreatIntelResult[] = incident?.threat_intel_results || []
   const relatedAlerts: IncidentRelatedAlert[] = incident?.related_alerts || []
@@ -393,7 +392,7 @@ const IncidentDetail: React.FC = () => {
                                     )}
                                   </Box>
                                 </Box>
-                                {enrichment.raw_response && (
+                                {Object.keys(enrichment.safe_result || {}).length > 0 && (
                                   <Box
                                     sx={{
                                       bgcolor: 'background.paper',
@@ -404,7 +403,7 @@ const IncidentDetail: React.FC = () => {
                                       overflowX: 'auto',
                                     }}
                                   >
-                                    <pre>{JSON.stringify(enrichment.raw_response, null, 2)}</pre>
+                                    <pre>{JSON.stringify(enrichment.safe_result, null, 2)}</pre>
                                   </Box>
                                 )}
                               </Paper>

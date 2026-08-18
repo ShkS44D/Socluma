@@ -9,7 +9,10 @@ from sqlalchemy.orm import sessionmaker
 from src.api.deps import get_current_user, get_db
 from src.core.database import Base
 from src.main import app
-from src.models.sqlalchemy import Classification, Incident, IncidentStatus, Severity, Tenant, User, UserRole
+from src.models.sqlalchemy import (
+    Classification, Incident, IncidentStatus, Severity, Tenant, User, UserRole,
+    OrganizationMembership, OrganizationRole,
+)
 
 
 class IncidentApiTests(unittest.TestCase):
@@ -48,6 +51,11 @@ class IncidentApiTests(unittest.TestCase):
             role=UserRole.ADMIN,
         )
         db.add(user)
+        db.flush()
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id, user_id=user.id,
+            role=OrganizationRole.ADMINISTRATOR, is_active=True,
+        ))
         db.commit()
         db.refresh(user)
         self.user_id = user.id

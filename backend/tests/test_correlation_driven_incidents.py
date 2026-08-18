@@ -15,6 +15,7 @@ from src.models.sqlalchemy import (
     Alert, AlertSource, AlertSourceType, AlertStatus, DetectionRule, Incident,
     IncidentAlert, IncidentMitreMapping, IncidentStatus, MitreTactic, MitreTechnique, RuleType,
     SecurityEvent, EventType, Severity, Tenant, User, UserRole,
+    OrganizationMembership, OrganizationRole,
 )
 from src.services.correlation_service import correlation_service
 from src.services.incident_service import AlertOwnershipConflict, incident_service
@@ -45,6 +46,10 @@ class CorrelationDrivenIncidentTests(unittest.TestCase):
         source = AlertSource(tenant_id=tenant.id, name="EDR", type=AlertSourceType.API)
         other_source = AlertSource(tenant_id=other.id, name="Other EDR", type=AlertSourceType.API)
         db.add_all([user, source, other_source]); db.flush()
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id, user_id=user.id,
+            role=OrganizationRole.ADMINISTRATOR, is_active=True,
+        ))
         db.add_all([
             MitreTechnique(technique_id="T1059", name="Command and Scripting Interpreter", tactic=MitreTactic.EXECUTION),
             MitreTechnique(technique_id="T1059.001", name="PowerShell", tactic=MitreTactic.EXECUTION),

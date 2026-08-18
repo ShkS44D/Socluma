@@ -4,7 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user, get_db, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, membership_permissions, require_all_permissions, require_permission
 from src.models.pydantic import (
     AIAnalysisResponse,
     Incident as IncidentResponse,
@@ -30,7 +31,7 @@ from src.models.pydantic import (
     ResponseActionCreate,
     IOC,
 )
-from src.models.sqlalchemy import IncidentPriority, IncidentStatus, Severity, User, UserRole
+from src.models.sqlalchemy import IncidentPriority, IncidentStatus, Severity, User
 from src.services.incident_service import incident_service
 from src.services.incident_comment_service import incident_comment_service
 from src.services.response_action_service import response_action_service
@@ -79,7 +80,7 @@ def list_incidents(
     sort_by: str = Query("updated_at", pattern="^(created_at|updated_at|risk_score|severity|priority)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     return incident_service.list_incidents(
         db=db,
@@ -101,7 +102,7 @@ def list_incidents(
 @router.get("/stats", response_model=IncidentStats)
 def get_incident_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     return incident_service.get_stats(db, current_user.tenant_id)
 
@@ -109,7 +110,7 @@ def get_incident_stats(
 @router.get("/feedback/stats", response_model=FeedbackStats)
 def get_feedback_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     return incident_service.get_feedback_stats(db, current_user.tenant_id)
 
@@ -122,7 +123,7 @@ def get_mitre_matrix(
     status: Optional[IncidentStatus] = None,
     incident_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     if incident_id:
         validate_uuid(incident_id, "incident_id")
@@ -135,7 +136,7 @@ def get_mitre_matrix(
 @router.get("/assigned", response_model=list[IncidentResponse])
 def get_assigned_incidents(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     return incident_service.list_assigned_incidents(db, current_user.tenant_id, current_user.id)
 
@@ -147,7 +148,7 @@ def get_incident(
     alert_page_size: int = Query(20, ge=1, le=100),
     include_alert_payloads: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     validate_uuid(incident_id, "incident_id")
     try:
@@ -182,7 +183,7 @@ def get_incident_explanation(
     evidence_limit: int = Query(20, ge=1, le=100),
     timeline_limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     validate_uuid(incident_id, "incident_id")
     try:
@@ -214,7 +215,7 @@ def assign_incident(
     assignment: IncidentAssignmentRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_ASSIGN)),
 ):
     validate_uuid(incident_id, "incident_id")
     validate_uuid(assignment.user_id, "assignment.user_id")
@@ -250,8 +251,15 @@ def update_incident_status(
     status_update: IncidentStatusUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
+    if status_update.status in {IncidentStatus.RESOLVED, IncidentStatus.CLOSED} and (
+        Permission.INCIDENTS_CLOSE.value not in membership_permissions(db, current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "PERMISSION_DENIED", "message": "Closing incidents requires incidents.close"},
+        )
     try:
         existing = incident_service.get_incident_model(db, current_user.tenant_id, incident_id)
         previous_status = existing.status.value if hasattr(existing.status, "value") else str(existing.status)
@@ -291,7 +299,7 @@ def update_incident_status(
 def analyze_incident(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_all_permissions(Permission.INCIDENTS_UPDATE, Permission.TRIAGE_AI_USE)),
 ):
     try:
         return incident_service.analyze_incident(db, current_user.tenant_id, incident_id)
@@ -305,7 +313,7 @@ def create_investigation_note(
     note_data: InvestigationNoteCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         note = incident_service.create_note(
@@ -336,7 +344,7 @@ def create_investigation_note(
 def get_investigation_notes(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         return incident_service.get_notes_for_incident(db, current_user.tenant_id, incident_id)
@@ -350,7 +358,7 @@ def create_feedback(
     feedback_data: FeedbackCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         feedback = incident_service.create_feedback(
@@ -381,7 +389,7 @@ def create_feedback(
 def get_incident_feedback(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         return incident_service.get_feedback_for_incident(
@@ -397,7 +405,7 @@ def get_incident_feedback(
 def get_incident_timeline(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         return incident_service.get_timeline(db, current_user.tenant_id, incident_id)
@@ -411,7 +419,7 @@ def update_incident_priority(
     priority_update: IncidentPriorityUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         incident = incident_service.update_priority(
@@ -444,7 +452,7 @@ def create_evidence(
     evidence_data: IncidentEvidenceCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         evidence = incident_service.create_evidence(
@@ -476,7 +484,7 @@ def create_evidence(
 def list_evidence(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         return incident_service.list_evidence(db, current_user.tenant_id, incident_id)
@@ -490,7 +498,7 @@ def delete_evidence(
     evidence_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         incident_service.delete_evidence(
@@ -519,7 +527,7 @@ def create_comment(
     comment_data: IncidentCommentCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         comment = incident_comment_service.create_comment(
@@ -543,7 +551,7 @@ def create_comment(
 def list_comments(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         comments = incident_comment_service.list_comments(
@@ -560,7 +568,7 @@ def create_response_action(
     action_data: ResponseActionCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         action = response_action_service.create_action(
@@ -584,7 +592,7 @@ def create_response_action(
 def list_response_actions(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         actions = response_action_service.list_actions(
@@ -599,7 +607,7 @@ def list_response_actions(
 def get_incident_iocs(
     incident_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_VIEW)),
 ):
     try:
         iocs = ioc_service.get_iocs_for_incident(db, current_user.tenant_id, incident_id)
@@ -613,7 +621,7 @@ def enrich_incident_ioc(
     incident_id: str,
     ioc_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     try:
         # Verify both incident and IOC exist and belong to tenant

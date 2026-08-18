@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_db, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import (
     AIAlertExplanationResponse,
     AIChatRequest,
@@ -17,7 +18,7 @@ from src.models.pydantic import (
     AIReportResponse,
     AITimelineResponse,
 )
-from src.models.sqlalchemy import User, UserRole
+from src.models.sqlalchemy import User
 from src.services.ai_investigation_service import (
     AIInvestigationRateLimitError,
     AIInvestigationRequestInProgressError,
@@ -26,7 +27,7 @@ from src.services.ai_investigation_service import (
 from src.services.audit_service import audit_service
 
 
-router = APIRouter(prefix="/ai", tags=["AI Investigation Copilot"])
+router = APIRouter(prefix="/ai", tags=["Triage AI"])
 
 
 def _client_ip(request: Request) -> str | None:
@@ -58,11 +59,16 @@ def _audit(db: Session, request: Request, user: User, action: str, resource_type
 def generate_incident_summary(
     incident_id: str,
     request: Request,
+    offline: bool = Query(False, description="Use the deterministic local analysis path in non-production environments."),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
-        result = ai_investigation_service.incident_summary(db, current_user.tenant_id, incident_id, current_user)
+        if offline and ai_investigation_service.settings.ENVIRONMENT.casefold() in {"production", "prod"}:
+            raise HTTPException(status_code=403, detail="Offline demo mode is unavailable in production")
+        result = ai_investigation_service.incident_summary(
+            db, current_user.tenant_id, incident_id, current_user, force_fallback=offline,
+        )
         _audit(db, request, current_user, "ai_incident_summary_generated", "incident", incident_id)
         return result
     except ValueError as exc:
@@ -75,7 +81,7 @@ def chat_with_incident_copilot(
     data: AIChatRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.chat(
@@ -107,7 +113,7 @@ def list_incident_conversations(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         return ai_investigation_service.list_conversations(
@@ -126,7 +132,7 @@ def get_incident_conversation(
     incident_id: str,
     conversation_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         return ai_investigation_service.get_conversation(
@@ -141,7 +147,7 @@ def generate_investigation_timeline(
     incident_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.timeline(db, current_user.tenant_id, incident_id, current_user)
@@ -156,7 +162,7 @@ def generate_incident_report(
     incident_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.report(db, current_user.tenant_id, incident_id, current_user)
@@ -171,7 +177,7 @@ def explain_alert(
     alert_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.alert_explanation(db, current_user.tenant_id, alert_id, current_user)
@@ -186,7 +192,7 @@ def analyze_ioc(
     ioc_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.ioc_analysis(db, current_user.tenant_id, ioc_id, current_user)
@@ -200,7 +206,7 @@ def analyze_ioc(
 def suggest_detection_rules(
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     result = ai_investigation_service.detection_suggestions(db, current_user.tenant_id, current_user)
     _audit(db, request, current_user, "ai_detection_suggestions_generated", "detection_rule")
@@ -212,7 +218,7 @@ def suggest_playbooks(
     request: Request,
     incident_id: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.TRIAGE_AI_USE)),
 ):
     try:
         result = ai_investigation_service.playbook_suggestions(db, current_user.tenant_id, current_user, incident_id=incident_id)

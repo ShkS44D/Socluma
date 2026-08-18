@@ -5,7 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user, get_db, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import (
     ActionConnector,
     ActionConnectorCreate,
@@ -21,7 +22,7 @@ from src.models.pydantic import (
     SOARActionApproval,
     SOARApprovalDecision,
 )
-from src.models.sqlalchemy import User, UserRole
+from src.models.sqlalchemy import User
 from src.services.audit_service import audit_service
 from src.services.soar_action_service import soar_action_service
 from src.core.validation import validate_uuid
@@ -56,14 +57,14 @@ def _audit(db: Session, request: Request, user: User, action: str, resource_type
 
 
 @router.get("/connector-types")
-def list_connector_types(current_user: User = Depends(get_current_user)):
+def list_connector_types(current_user: User = Depends(require_permission(Permission.SOAR_VIEW))):
     return soar_action_service.list_connector_types()
 
 
 @router.get("/connectors", response_model=list[ActionConnector])
 def list_connectors(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     return [ActionConnector.model_validate(item) for item in soar_action_service.list_connectors(db, current_user.tenant_id)]
 
@@ -73,7 +74,7 @@ def create_connector(
     data: ActionConnectorCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.SOAR_MANAGE)),
 ):
     try:
         connector = soar_action_service.create_connector(db, current_user.tenant_id, current_user.id, data)
@@ -87,7 +88,7 @@ def create_connector(
 def get_connector(
     connector_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     validate_uuid(connector_id, "connector_id")
     try:
@@ -102,7 +103,7 @@ def update_connector(
     data: ActionConnectorUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.SOAR_MANAGE)),
 ):
     validate_uuid(connector_id, "connector_id")
     try:
@@ -118,7 +119,7 @@ def delete_connector(
     connector_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.SOAR_MANAGE)),
 ):
     validate_uuid(connector_id, "connector_id")
     try:
@@ -135,7 +136,7 @@ def test_connector(
     request: Request,
     credential_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.SOAR_MANAGE)),
 ):
     validate_uuid(connector_id, "connector_id")
     if credential_id:
@@ -152,7 +153,7 @@ def test_connector(
 def list_credentials(
     connector_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.SOAR_MANAGE)),
 ):
     if connector_id:
         validate_uuid(connector_id, "connector_id")
@@ -164,7 +165,7 @@ def create_credential(
     data: ConnectorCredentialCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.SOAR_CREDENTIALS_MANAGE)),
 ):
     validate_uuid(data.connector_id, "connector_id")
     try:
@@ -181,7 +182,7 @@ def update_credential(
     data: ConnectorCredentialUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.SOAR_CREDENTIALS_MANAGE)),
 ):
     validate_uuid(credential_id, "credential_id")
     try:
@@ -196,7 +197,7 @@ def update_credential(
 def list_executions(
     connector_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     if connector_id:
         validate_uuid(connector_id, "connector_id")
@@ -208,7 +209,7 @@ def create_execution(
     data: ConnectorExecutionCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.SOAR_EXECUTE)),
 ):
     validate_uuid(data.connector_id, "connector_id")
     if data.credential_id:
@@ -225,7 +226,7 @@ def create_execution(
 def get_execution(
     execution_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -238,7 +239,7 @@ def get_execution(
 def list_logs(
     execution_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -250,7 +251,7 @@ def list_logs(
 @router.get("/approvals", response_model=list[SOARActionApproval])
 def list_approvals(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.SOAR_VIEW)),
 ):
     return [SOARActionApproval.model_validate(item) for item in soar_action_service.list_approvals(db, current_user.tenant_id)]
 
@@ -261,7 +262,7 @@ def approve_action(
     decision: SOARApprovalDecision,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.SOAR_APPROVE)),
 ):
     validate_uuid(approval_id, "approval_id")
     try:
@@ -278,7 +279,7 @@ def reject_action(
     decision: SOARApprovalDecision,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.SOAR_APPROVE)),
 ):
     validate_uuid(approval_id, "approval_id")
     try:

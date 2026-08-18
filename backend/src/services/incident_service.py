@@ -41,9 +41,10 @@ from src.models.sqlalchemy import (
     Severity,
     Feedback,
     Classification,
+    OrganizationMembership,
     User,
-    UserRole,
 )
+from src.core.permissions import Permission, membership_permissions
 from src.services.ai_service import ai_service
 from src.services.correlation_service import CorrelationCandidate, correlation_service
 from src.services.risk_service import risk_service
@@ -474,15 +475,18 @@ class IncidentService:
         incident = self.get_incident_model(db, tenant_id, incident_id)
         assignee = (
             db.query(User)
+            .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
             .filter(
                 User.id == assignee_id,
-                User.tenant_id == tenant_id,
-                User.role.in_([UserRole.ADMIN, UserRole.ANALYST]),
                 User.is_active.is_(True),
+                OrganizationMembership.tenant_id == tenant_id,
+                OrganizationMembership.is_active.is_(True),
             )
             .first()
         )
-        if assignee is None:
+        if assignee is None or Permission.INCIDENTS_UPDATE.value not in membership_permissions(
+            db, assignee, tenant_id
+        ):
             raise ValueError("Assignee not found")
 
         incident.assigned_to = assignee.id
@@ -757,15 +761,20 @@ class IncidentService:
             .all()
         top_alert_sources = [{"id": id, "name": name, "count": count} for id, name, count in alert_sources_data]
 
-        analysts = (
+        candidates = (
             db.query(User)
+            .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
             .filter(
-                User.tenant_id == tenant_id,
-                User.role.in_([UserRole.ADMIN, UserRole.ANALYST]),
                 User.is_active.is_(True),
+                OrganizationMembership.tenant_id == tenant_id,
+                OrganizationMembership.is_active.is_(True),
             )
             .all()
         )
+        analysts = [
+            candidate for candidate in candidates
+            if Permission.INCIDENTS_UPDATE.value in membership_permissions(db, candidate, tenant_id)
+        ]
         note_counts = defaultdict(int)
         for user_id, count in (
             db.query(InvestigationNote.user_id, func.count(InvestigationNote.id))

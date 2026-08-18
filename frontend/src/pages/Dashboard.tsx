@@ -1,5 +1,6 @@
 import React from 'react'
-import { Alert, Box, Grid, Stack, Typography } from '@mui/material'
+import { Alert, AlertTitle, Box, Button, Grid, Stack, Typography } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Assessment,
   CrisisAlert,
@@ -59,6 +60,27 @@ const Dashboard: React.FC = () => {
       {error && (
         <Alert severity="warning" variant="outlined">
           {error}
+        </Alert>
+      )}
+      {metrics.collectorsOnline.value === 0 && metrics.eventsToday.value === 0 && (
+        <Alert
+          severity="info"
+          variant="outlined"
+          action={(
+            <Button
+              color="inherit"
+              size="small"
+              component={RouterLink}
+              to="/log-sources"
+            >
+              Connect collector
+            </Button>
+          )}
+        >
+          <AlertTitle>No telemetry connected to this organization</AlertTitle>
+          Each organization has isolated collectors and events. Register a collector for this
+          organization to begin receiving telemetry; collectors from another organization cannot
+          share data here.
         </Alert>
       )}
 

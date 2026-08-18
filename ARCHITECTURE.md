@@ -1,5 +1,32 @@
 # TriageOps Architecture
 
+Phase 7 separates stable detection identities from immutable content versions.
+Only an explicit production version executes; matches retain exact version/hash
+provenance. See [docs/PHASE7_DETECTION_ENGINEERING.md](docs/PHASE7_DETECTION_ENGINEERING.md).
+
+## Commercial IOC boundary
+
+Threat-source credentials use versioned authenticated encryption and redacted serializers.
+TAXII/MISP, imports, bulk actions, hunts, and reports execute as bounded tenant-scoped jobs.
+External HTTP requests revalidate every destination and redirect. IOC response items are
+recommendations bound to the sensitive-action approval workflow; no recommendation executes
+automatically. The relationship graph is a bounded relational projection with an accessible
+table fallback. See `docs/IOC_INTELLIGENCE.md` and `docs/PHASE76_DEMO_READINESS.md`.
+
+## Search and investigation boundary
+
+Phase 6 keeps search inside SQLAlchemy/PostgreSQL/SQLite. A typed allowlist parser produces an AST that becomes only parameterized ORM expressions after tenant and permission scope. Entity extraction is bounded downstream ingestion work; schedules and export jobs revalidate tenant context. See `docs/PHASE6_SEARCH_INVESTIGATIONS.md`.
+
+## Audit and data-protection boundary
+
+Security and administrative events flow through the central audit service, which
+normalizes taxonomy, recursively sanitizes metadata, and appends tenant-sequenced
+HMAC chain records. Retention workers archive only a contiguous eligible chain
+prefix and honor active legal holds. Export workers read through the same tenant
+filter builder and write opaque, expiring artifacts. Sensitive MFA and connector
+values use versioned authenticated encryption; keys remain runtime configuration.
+See `docs/PHASE4_AUDIT_DATA_PROTECTION.md`.
+
 This document describes the architecture implemented in the current repository. It intentionally avoids future-only services and roadmap claims.
 
 ## System Overview
@@ -75,6 +102,15 @@ The implemented authentication model includes:
 Collector authentication is separate from user authentication. Collectors use bearer tokens that are verified against stored token hashes.
 
 ## Authorization
+
+Tenant authorization is permission-based and resolved from the active
+`OrganizationMembership`; `User.role` is retained only for platform/bootstrap
+compatibility. Signed access tokens bind the active tenant and session, and
+route tenant identifiers must match that context. Service policies independently
+protect ownership, final-owner state, role assignment, session revocation, API
+key scopes, approvals, and resource tenant ownership. Frontend permission
+visibility is usability only—the backend remains authoritative. The complete
+model and route inventory are in `docs/AUTHORIZATION.md`.
 
 RBAC roles are:
 
@@ -166,14 +202,14 @@ In production-style deployments, SOAR actions are queued to Celery and processed
 
 WebSocket connections are tracked per tenant, cleaned up on send failures, and receive heartbeat messages after the configured idle interval. The in-memory connection manager is intentionally isolated behind a service boundary so Redis Pub/Sub can be added later without changing API routes.
 
-## AI Investigation Copilot Architecture
+## Triage AI Architecture
 
-The AI Investigation Copilot is implemented as a tenant-aware investigation service, not a general chatbot. API routes under `/api/v1/ai` require authenticated users with analyst-level roles and resolve organization scope from the authenticated session.
+Triage AI is implemented as a tenant-aware investigation service, not a general chatbot. API routes under `/api/v1/ai` require authenticated users with analyst-level roles and resolve organization scope from the authenticated session.
 
 Core service objects:
 
 - `IncidentIntelligenceService`: creates and explains the event-to-rule-to-alert-to-incident provenance chain, alert contributions, entity lineage, evidence references, correlation context, and deterministic risk explanation.
-- `IncidentCopilotTools`: exposes bounded, read-only, tenant-scoped views for incident summary, origin, alerts, events, detection matches, timeline, entities, IOCs, risk, MITRE mapping, notes, and audit history.
+- The incident-scoped Triage AI context builder exposes bounded, read-only, tenant-scoped views for incident summary, origin, alerts, events, detection matches, timeline, entities, IOCs, risk, MITRE mapping, notes, and audit history.
 - `ContextBuilder`: remains available for non-conversational AI artifacts that use broader tenant investigation context.
 - `PromptBuilder`: redacts sensitive fields, filters common prompt-injection phrases from telemetry/comments, bounds prompt size, and emits structured JSON prompts.
 - `TimelineBuilder`: creates chronological incident timelines from stored evidence and response activity.
@@ -186,9 +222,9 @@ Incident provenance is persisted only where history would otherwise be lost: cre
 
 New detection and Playbook incidents are marked with recorded provenance. Direct ORM-created incidents default to manual provenance. Pre-tracking incidents are marked `legacy_derived`; dynamically reconstructed entities and timestamps are identified as derived, and unavailable historical correlation reasons are not fabricated. The detection alert that creates an incident is the deterministic primary alert for all APIs.
 
-Generated summaries, explanations, IOC analysis, timelines, reports, detection suggestions, and playbook suggestions are stored as AI investigation artifacts. Copilot chat messages are persisted separately so analysts can continue an incident-scoped conversation without exposing cross-tenant data.
+Generated summaries, explanations, IOC analysis, timelines, reports, detection suggestions, and playbook suggestions are stored as AI investigation artifacts. Triage AI chat messages are persisted separately so analysts can continue an incident-scoped conversation without exposing cross-tenant data.
 
-Copilot writes are idempotent. A client request ID is bound to the tenant, user, incident, conversation, and normalized question fingerprint. Redis coordinates in-flight requests across workers; a bounded process-local lock preserves retry safety when Redis is unavailable. While the first request is running, matching callers receive a conflict response. Once complete, authorized retries replay the persisted answer. Scope or fingerprint mismatches are rejected, provider failures leave no partial conversation pair, and failed requests release their lock for a safe retry.
+Triage AI writes are idempotent. A client request ID is bound to the tenant, user, incident, conversation, and normalized question fingerprint. Redis coordinates in-flight requests across workers; a bounded process-local lock preserves retry safety when Redis is unavailable. While the first request is running, matching callers receive a conflict response. Once complete, authorized retries replay the persisted answer. Scope or fingerprint mismatches are rejected, provider failures leave no partial conversation pair, and failed requests release their lock for a safe retry.
 
 ```mermaid
 sequenceDiagram
@@ -200,7 +236,7 @@ sequenceDiagram
     participant LLM as OpenAI Provider
     participant Audit
 
-    Analyst->>Frontend: Request incident summary or Copilot answer
+    Analyst->>Frontend: Request incident summary or Triage AI answer
     Frontend->>API: POST /api/v1/ai/... with access token
     API->>API: Enforce RBAC and active organization
     API->>Service: Generate tenant-scoped AI result
@@ -214,7 +250,7 @@ sequenceDiagram
     API-->>Frontend: Return structured AI response
 ```
 
-OpenAI receives a bounded structured prompt, not an unrestricted database dump. `IncidentCopilotTools` applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. The Copilot cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When OpenAI is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
+OpenAI receives a bounded structured prompt, not an unrestricted database dump. The Triage AI context builder applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. Triage AI cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When OpenAI is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
 
 Evidence-reference navigation is backend-authoritative. The frontend resolves each reference through the tenant-scoped incident evidence API before navigating. Deleted or unsupported evidence returns a safe not-found response, and a reference from another tenant cannot be resolved even when its identifier is known.
 
@@ -231,6 +267,13 @@ Health endpoints:
 - `/health`: full health report including optional degraded providers.
 
 Readiness checks include database, Redis, worker broker reachability, storage, migration status, AI provider configuration, and threat intelligence provider configuration.
+The migration check compares `alembic_version` with the repository's single current head and makes readiness fail with HTTP 503 when the database is behind. Liveness remains dependency-free.
+
+## Organization lifecycle and usage
+
+Organization deletion is a state machine: `active` -> `pending_deletion` -> `deleted`, with cancellation returning `pending_deletion` to `active`. The transition to pending requires the owner PIN and disables normal user, collector, session, and API access. A configurable UTC purge time is stored on the organization. The idempotent purge service deletes tenant-owned operational rows in dependency order, disables primary users, clears PIN material, and retains the tenant tombstone plus audit evidence.
+
+`organization_usage` stores one concurrency-safe aggregate per tenant and UTC date. Current resource counts are tenant-scoped indexed SQL counts; request middleware atomically increments API and Triage AI counters. Storage is a SQL aggregate of managed application payload lengths and does not represent infrastructure disk allocation.
 
 ## Frontend
 
@@ -248,7 +291,7 @@ Implemented areas include:
 - Log sources and collectors.
 - Playbooks.
 - SOAR connectors, credentials, action history, and execution detail views.
-- AI Copilot dashboard, incident Copilot, AI reports, timeline viewer, alert explanations, IOC analysis, detection suggestions, and playbook suggestions.
+- Triage AI dashboard, incident-scoped chat, AI reports, timeline viewer, alert explanations, IOC analysis, detection suggestions, and playbook suggestions.
 - WebSocket-driven live updates.
 - Password change UI.
 

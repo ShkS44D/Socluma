@@ -13,6 +13,7 @@ from src.main import app
 from src.models.sqlalchemy import (
     AuditLog,
     Collector,
+    LogSource,
     OrganizationMembership,
     OrganizationRole,
     Tenant,
@@ -76,7 +77,7 @@ class OrganizationTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=email,
-            hashed_password=get_password_hash("Password123!"),
+            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
             full_name=email.split("@")[0],
             role=role,
         )
@@ -106,6 +107,7 @@ class OrganizationTests(unittest.TestCase):
             json={
                 "name": "Acme Security",
                 "slug": "acme-security",
+                "deletion_pin": "1234",
                 "description": "Managed SOC",
                 "industry": "Technology",
                 "country": "US",
@@ -131,7 +133,7 @@ class OrganizationTests(unittest.TestCase):
     def test_cross_tenant_organization_access_is_denied(self):
         self._as_user(self.outsider_id)
         response = self.client.get(f"/api/v1/organizations/{self.tenant_id}")
-        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.status_code, 404, response.text)
 
     def test_invitation_acceptance_creates_membership(self):
         self._as_user(self.owner_id)
@@ -174,6 +176,47 @@ class OrganizationTests(unittest.TestCase):
             json={"name": "blocked", "type": "windows"},
         )
         self.assertEqual(response.status_code, 403, response.text)
+
+    def test_collector_registration_accepts_unassigned_log_source(self):
+        self._as_user(self.owner_id)
+        response = self.client.post(
+            "/api/v1/collectors/register",
+            json={
+                "name": "Saad-Windows-PC",
+                "type": "windows",
+                "hostname": "saad-pc",
+                "log_source_id": "",
+            },
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+
+        db = self.SessionTesting()
+        collector = db.query(Collector).filter(Collector.id == response.json()["id"]).one()
+        self.assertIsNone(collector.log_source_id)
+        db.close()
+
+    def test_collector_registration_rejects_cross_tenant_log_source(self):
+        db = self.SessionTesting()
+        outsider_source = LogSource(
+            tenant_id=self.outsider_tenant_id,
+            name="Outsider source",
+        )
+        db.add(outsider_source)
+        db.commit()
+        source_id = outsider_source.id
+        db.close()
+
+        self._as_user(self.owner_id)
+        response = self.client.post(
+            "/api/v1/collectors/register",
+            json={
+                "name": "Cross-tenant collector",
+                "type": "windows",
+                "log_source_id": source_id,
+            },
+        )
+        self.assertEqual(response.status_code, 404, response.text)
+        self.assertEqual(response.json()["error_code"], "LOG_SOURCE_NOT_FOUND")
 
 
 if __name__ == "__main__":

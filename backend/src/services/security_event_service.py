@@ -133,7 +133,6 @@ class SecurityEventService:
                 SecurityEvent.tenant_id == tenant_id,
                 SecurityEvent.source == source,
                 SecurityEvent.event_type == event_type,
-                SecurityEvent.timestamp == timestamp,
             )
             .order_by(SecurityEvent.created_at.desc())
             .limit(20)
@@ -143,8 +142,15 @@ class SecurityEventService:
         record_number = raw_event.get("record_number") or raw_event.get("RecordNumber")
         image = raw_event.get("Image") or raw_event.get("process")
         command_line = raw_event.get("CommandLine") or raw_event.get("command_line") or raw_event.get("command")
+        source_timestamp = raw_event.get("timestamp") or raw_event.get("TimeCreated")
         for candidate in candidates:
             candidate_raw = candidate.raw_event or {}
+            candidate_source_timestamp = candidate_raw.get("timestamp") or candidate_raw.get("TimeCreated")
+            if source_timestamp is not None and candidate_source_timestamp is not None:
+                if str(source_timestamp) != str(candidate_source_timestamp):
+                    continue
+            elif ensure_utc(candidate.timestamp) != ensure_utc(timestamp):
+                continue
             candidate_record_number = candidate_raw.get("record_number") or candidate_raw.get("RecordNumber")
             if record_number and candidate_record_number and str(record_number) == str(candidate_record_number):
                 return candidate

@@ -340,11 +340,14 @@ export const useDashboardData = () => {
     loadDashboardData(true)
   }, [loadDashboardData]) // Now safe, no data dependency
 
-  // Polling: full dashboard refresh every 15 seconds
+  // WebSocket notifications normally refresh this immediately. A short polling
+  // fallback heals missed notifications after reconnects or brief network loss.
   useEffect(() => {
     const intervalId = setInterval(() => {
-      loadDashboardData(false)
-    }, 15000) // 15 seconds
+      if (!document.hidden) {
+        loadDashboardData(false)
+      }
+    }, 5000)
 
     return () => clearInterval(intervalId)
   }, [loadDashboardData])

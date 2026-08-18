@@ -22,6 +22,8 @@ from src.models.sqlalchemy import (
     Tenant,
     User,
     UserRole,
+    OrganizationMembership,
+    OrganizationRole,
 )
 
 
@@ -89,11 +91,21 @@ class SOARFrameworkTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}-{os.urandom(2).hex()}@example.com",
-            hashed_password=get_password_hash("Password123!"),
+            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )
         db.add(user)
+        db.flush()
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id, user_id=user.id,
+            role={
+                UserRole.ADMIN: OrganizationRole.ADMINISTRATOR,
+                UserRole.ANALYST: OrganizationRole.ANALYST,
+                UserRole.VIEWER: OrganizationRole.VIEWER,
+            }[role],
+            is_active=True,
+        ))
         db.commit()
         db.refresh(user)
         user_id = user.id
@@ -184,6 +196,13 @@ class SOARFrameworkTests(unittest.TestCase):
         self.assertEqual(approvals.status_code, 200)
         approval_id = approvals.json()[0]["id"]
         approve = self.client.post(f"/api/v1/soar/approvals/{approval_id}/approve", json={"comment": "ok"})
+        self.assertEqual(approve.status_code, 403)
+        db = self.SessionTesting()
+        membership = db.query(OrganizationMembership).filter_by(user_id=self.admin_id).one()
+        membership.role = OrganizationRole.OWNER
+        db.commit()
+        db.close()
+        approve = self.client.post(f"/api/v1/soar/approvals/{approval_id}/approve", json={"comment": "owner approved"})
         self.assertEqual(approve.status_code, 200, approve.text)
 
         db = self.SessionTesting()

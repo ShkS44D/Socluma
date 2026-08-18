@@ -10,7 +10,15 @@ from src.api.deps import get_current_user, get_db
 from src.core.database import Base
 from src.core.security import get_password_hash
 from src.main import app
-from src.models.sqlalchemy import AuditLog, Classification, Tenant, User, UserRole
+from src.models.sqlalchemy import (
+    AuditLog,
+    Classification,
+    OrganizationMembership,
+    OrganizationRole,
+    Tenant,
+    User,
+    UserRole,
+)
 
 
 class AuthAndRbacTests(unittest.TestCase):
@@ -56,11 +64,23 @@ class AuthAndRbacTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}@example.com",
-            hashed_password=get_password_hash("Password123!"),
+            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )
         db.add(user)
+        db.flush()
+        membership_role = {
+            UserRole.ADMIN: OrganizationRole.ADMINISTRATOR,
+            UserRole.ANALYST: OrganizationRole.ANALYST,
+            UserRole.VIEWER: OrganizationRole.VIEWER,
+        }[role]
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            role=membership_role,
+            is_active=True,
+        ))
         db.commit()
         db.refresh(user)
         user_id = user.id
@@ -107,7 +127,7 @@ class AuthAndRbacTests(unittest.TestCase):
             "/api/v1/auth/register",
             json={
                 "email": "admin@example.com",
-                "password": "Password123!",
+                "password": "TriageOps-Test-Passphrase-2026!",
                 "full_name": "Admin User",
                 "tenant_name": "Test Tenant",
                 "tenant_slug": "test-tenant",
@@ -117,7 +137,7 @@ class AuthAndRbacTests(unittest.TestCase):
 
         login_response = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "Password123!"},
+            json={"email": "admin@example.com", "password": "TriageOps-Test-Passphrase-2026!"},
         )
         self.assertEqual(login_response.status_code, 200)
         token = login_response.json()["access_token"]

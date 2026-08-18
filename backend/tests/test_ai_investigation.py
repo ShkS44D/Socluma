@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 import json
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -31,6 +32,8 @@ from src.models.sqlalchemy import (
     Tenant,
     User,
     UserRole,
+    OrganizationMembership,
+    OrganizationRole,
 )
 from src.services.ai_investigation_service import PromptBuilder
 from src.services.incident_intelligence_service import incident_intelligence_service
@@ -87,12 +90,21 @@ class AIInvestigationTests(unittest.TestCase):
             user = User(
                 tenant_id=tenant.id,
                 email=f"{slug}-{role.value}@example.com",
-                hashed_password=get_password_hash("Password123!"),
+                hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
                 full_name=f"{role.value.title()} User",
                 role=role,
             )
             db.add(user)
             db.flush()
+            membership_role = {
+                UserRole.ADMIN: OrganizationRole.ADMINISTRATOR,
+                UserRole.ANALYST: OrganizationRole.ANALYST,
+                UserRole.VIEWER: OrganizationRole.VIEWER,
+            }[role]
+            db.add(OrganizationMembership(
+                tenant_id=tenant.id, user_id=user.id,
+                role=membership_role, is_active=True,
+            ))
             ids.append(user.id)
         db.commit()
         tenant_id = tenant.id
@@ -189,6 +201,17 @@ class AIInvestigationTests(unittest.TestCase):
         self.assertEqual(artifact_count, 1)
         self.assertIsNotNone(incident.ai_summary)
         self.assertIn("ai_incident_summary_generated", actions)
+
+    def test_offline_incident_summary_never_calls_external_provider(self):
+        self._as_user(self.analyst_id)
+        with patch("src.services.ai_investigation_service.llm_provider.generate_json", side_effect=AssertionError("provider called")):
+            response = self.client.post(f"/api/v1/ai/incident/{self.incident_id}/summary?offline=true")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body["executive_summary"].startswith("Deterministic offline analysis"))
+        self.assertTrue(body["recommended_next_steps"])
+        self.assertTrue(body["suggested_containment"])
+        self.assertGreater(body["confidence_score"], 0)
 
     def test_alert_ioc_timeline_report_and_suggestions(self):
         self._as_user(self.admin_id)

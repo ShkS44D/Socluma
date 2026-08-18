@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional, List, Dict, Any
 from src.models.sqlalchemy import (
     UserRole, 
@@ -62,6 +62,7 @@ class HealthStatus(BaseModel):
     status: str
     request_id: Optional[str] = None
     service: str = "backend"
+    version: str = "1.0.0"
     timestamp: datetime
 
 
@@ -109,6 +110,13 @@ class AIIncidentSummaryResponse(BaseModel):
     suggested_containment: List[str]
     suggested_mitre_attack_techniques: List[MITRETechniqueSuggestion]
     confidence_score: float = Field(ge=0, le=100)
+    analysis_mode: str = "provider_assisted"
+    correlation_reasons: List[str] = Field(default_factory=list)
+    risk_reasoning: List[str] = Field(default_factory=list)
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+    entities: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence_references: List[Dict[str, Any]] = Field(default_factory=list)
+    limitations: List[str] = Field(default_factory=list)
     artifact: AIArtifact
 
 
@@ -239,14 +247,16 @@ class AIPlaybookSuggestionsResponse(BaseModel):
 
 # Token
 class Token(BaseModel):
-    access_token: str
-    token_type: str
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
     refresh_token: Optional[str] = None
     expires_in: Optional[int] = None
+    mfa_required: bool = False
+    challenge_token: Optional[str] = None
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(min_length=20, max_length=512)
 
 
 class LogoutRequest(BaseModel):
@@ -254,12 +264,98 @@ class LogoutRequest(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=1, max_length=128)
 
 
 class MessageResponse(BaseModel):
     detail: str
+
+
+class MFAChallengeRequest(BaseModel):
+    challenge_token: str = Field(min_length=20, max_length=2048)
+    code: str = Field(min_length=6, max_length=32)
+    recovery_code: bool = False
+
+
+class MFAEnrollmentStartRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+
+
+class MFAEnrollmentConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class MFASensitiveActionRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class RecoveryCodesResponse(BaseModel):
+    recovery_codes: List[str]
+
+
+class EmailTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+
+
+class EmailAddressRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=512)
+    new_password: str = Field(min_length=1, max_length=128)
+
+
+class SessionResponse(BaseModel):
+    id: str
+    created_at: datetime
+    last_activity_at: Optional[datetime] = None
+    expires_at: datetime
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    device_label: Optional[str] = None
+    revoked_at: Optional[datetime] = None
+    revocation_reason: Optional[str] = None
+    current: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SessionListResponse(BaseModel):
+    items: List[SessionResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class AuthSecurityEventResponse(BaseModel):
+    id: str
+    event_type: str
+    result: str
+    severity: str
+    reason_code: Optional[str] = None
+    ip_address: Optional[str] = None
+    device_label: Optional[str] = None
+    request_id: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuthSecurityEventListResponse(BaseModel):
+    items: List[AuthSecurityEventResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class AccountSecurityStatus(BaseModel):
+    mfa_enabled: bool
+    recovery_codes_remaining: int
+    email_verified: bool
+    email_verification_required: bool
 
 
 class TokenData(BaseModel):
@@ -291,13 +387,33 @@ class Tenant(TenantBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
+    deletion_requested_at: Optional[datetime] = None
+    scheduled_purge_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    deletion_requested_by_id: Optional[str] = None
+    sensitive_action_approval_mode: str = "none"
+    permission_revision: int = 1
+
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer(
+        "created_at",
+        "updated_at",
+        "deletion_requested_at",
+        "scheduled_purge_at",
+        "deleted_at",
+    )
+    def serialize_tenant_datetime(self, value: Optional[datetime]) -> Optional[str]:
+        if value is None:
+            return None
+        aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        return aware.isoformat().replace("+00:00", "Z")
 
 
 class OrganizationCreate(BaseModel):
     name: str
     slug: str
+    deletion_pin: str = Field(pattern=r"^\d{4}$")
     description: Optional[str] = None
     logo: Optional[str] = None
     industry: Optional[str] = None
@@ -321,6 +437,9 @@ class OrganizationUpdate(BaseModel):
     max_collectors: Optional[int] = Field(default=None, ge=0)
     max_storage: Optional[int] = Field(default=None, ge=0)
     status: Optional[OrganizationStatus] = None
+    sensitive_action_approval_mode: Optional[str] = Field(
+        default=None, pattern=r"^(none|one_person|two_person)$"
+    )
 
 
 class Organization(Tenant):
@@ -343,7 +462,118 @@ class OrganizationMembership(BaseModel):
 
 class OrganizationMemberUpdate(BaseModel):
     role: Optional[OrganizationRole] = None
+    custom_role_id: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+class DeletionPinRequest(BaseModel):
+    pin: str = Field(pattern=r"^\d{4}$")
+    current_password: str = Field(min_length=1)
+
+
+class OrganizationDeleteRequest(BaseModel):
+    pin: str = Field(
+        pattern=r"^\d{4}$",
+        description="Four-digit owner deletion PIN used to schedule deletion.",
+        examples=["1234"],
+    )
+    approval_id: Optional[str] = Field(default=None, max_length=36)
+
+
+class PermissionDescriptor(BaseModel):
+    identifier: str
+    category: str
+    description: str
+    owner_only: bool = False
+
+
+class PermissionCatalog(BaseModel):
+    permissions: list[PermissionDescriptor]
+
+
+class EffectivePermissions(BaseModel):
+    organization_id: str
+    membership_id: str
+    role: OrganizationRole
+    custom_role_id: Optional[str] = None
+    permissions: list[str]
+    permission_revision: int
+
+
+class CustomRoleCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class CustomRoleUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    permissions: Optional[list[str]] = None
+
+
+class CustomRole(BaseModel):
+    id: str
+    tenant_id: str
+    name: str
+    description: Optional[str] = None
+    permissions: list[str]
+    is_system: bool
+    is_protected: bool = False
+    permission_revision: int = 1
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class APIKeyCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    scopes: list[str] = Field(min_length=1, max_length=30)
+    expires_in_days: int = Field(default=90, ge=1, le=365)
+
+
+class APIKeyResponse(BaseModel):
+    id: str
+    tenant_id: str
+    name: str
+    key_prefix: str
+    scopes: list[str]
+    expires_at: datetime
+    revoked_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+    created_at: datetime
+    api_key: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApprovalRequestCreate(BaseModel):
+    action_type: str = Field(min_length=3, max_length=100, pattern=r"^[a-z][a-z0-9_.-]+$")
+    target_resource_type: str = Field(min_length=2, max_length=100)
+    target_resource_id: str = Field(min_length=1, max_length=100)
+    safe_metadata: Dict[str, Any] = Field(default_factory=dict)
+    expires_in_minutes: int = Field(default=30, ge=5, le=1440)
+
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: str = Field(pattern=r"^(approve|reject)$")
+
+
+class ApprovalResponse(BaseModel):
+    id: str
+    tenant_id: str
+    requester_id: str
+    action_type: str
+    target_resource_type: str
+    target_resource_id: str
+    required_approvals: int
+    status: str
+    safe_metadata: Dict[str, Any]
+    expires_at: datetime
+    approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    executed_at: Optional[datetime] = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrganizationInvitationCreate(BaseModel):
@@ -387,11 +617,35 @@ class OrganizationUsage(BaseModel):
     collector_count: int
     event_count: int
     alert_count: int
+    incident_count: int
     playbook_count: int
+    playbook_execution_count: int
     soar_execution_count: int
+    triage_ai_request_count: int
     storage_bytes: int
     api_request_count: int
+    period_start: datetime
+    period_end: datetime
+    storage_measurement: str
     limits: Dict[str, int]
+
+
+class OrganizationUsageHistoryItem(BaseModel):
+    snapshot_date: date
+    user_count: int
+    collector_count: int
+    event_count: int
+    alert_count: int
+    incident_count: int
+    playbook_count: int
+    playbook_execution_count: int
+    soar_execution_count: int
+    triage_ai_request_count: int
+    storage_bytes: int
+    api_request_count: int
+    calculated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubscriptionInfo(BaseModel):
@@ -408,14 +662,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
     tenant_name: str
     tenant_slug: str
 
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserUpdate(BaseModel):
@@ -431,6 +685,8 @@ class User(UserBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    mfa_enabled: bool = False
+    email_verified: bool = False
     
     model_config = ConfigDict(from_attributes=True)
         
@@ -438,16 +694,50 @@ class User(UserBase):
     def serialize_datetime(self, dt: datetime, _info) -> str:
         return dt.isoformat() + 'Z' if dt.tzinfo else dt.isoformat()
 
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        model = super().model_validate(obj, *args, **kwargs)
+        model.mfa_enabled = bool(getattr(obj, "mfa_enabled_at", None))
+        model.email_verified = bool(
+            getattr(obj, "email_verified_at", None)
+            or getattr(obj, "email_verification_exempt", False)
+        )
+        return model
+
 
 class AuditLog(BaseModel):
     id: str
     tenant_id: Optional[str] = None
     user_id: Optional[str] = None
+    actor_membership_id: Optional[str] = None
+    actor_session_id: Optional[str] = None
+    actor_type: str = "user"
     action: str
+    category: str = "system"
+    severity: str = "info"
     resource_type: Optional[str] = None
     resource_id: Optional[str] = None
+    parent_resource_type: Optional[str] = None
+    parent_resource_id: Optional[str] = None
     ip_address: Optional[str] = None
+    actor_role: Optional[str] = None
+    status: str = "success"
+    user_agent: Optional[str] = None
+    request_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    approval_request_id: Optional[str] = None
+    failure_reason: Optional[str] = None
+    before_values: Optional[Dict[str, Any]] = None
+    after_values: Optional[Dict[str, Any]] = None
     details: Optional[Dict[str, Any]] = None
+    event_source: str = "application"
+    retention_class: str = "administrative"
+    data_classification: str = "confidential"
+    sequence_number: Optional[int] = None
+    previous_event_hash: Optional[str] = None
+    event_hash: Optional[str] = None
+    hash_algorithm_version: int = 1
+    integrity_key_version: int = 1
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -844,6 +1134,7 @@ class IncidentDetectionMatchResponse(BaseModel):
     rule_id: Optional[str] = None
     rule_name: Optional[str] = None
     mitre_technique_id: Optional[str] = None
+    sigma_rule_id: Optional[str] = None
     matched_condition: Optional[str] = None
     why_matched: Optional[str] = None
     severity: str
@@ -991,8 +1282,17 @@ class IOCBase(BaseModel):
     source: Optional[str] = None
     severity: Severity = Severity.MEDIUM
     confidence_score: int = 0
+    source_reliability: int = Field(default=50, ge=0, le=100)
+    lifecycle_status: str = "new"
+    tlp: str = "TLP:AMBER"
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    source_references: List[str] = Field(default_factory=list)
+    external_source_ids: Dict[str, str] = Field(default_factory=dict)
+    stix_id: Optional[str] = None
+    classification: Optional[str] = None
     tags: Optional[List[str]] = None
-    is_active: bool = True
+    is_active: bool = False
 
 
 class IOCCreate(IOCBase):
@@ -1004,6 +1304,12 @@ class IOCUpdate(BaseModel):
     source: Optional[str] = None
     severity: Optional[Severity] = None
     confidence_score: Optional[int] = None
+    source_reliability: Optional[int] = Field(default=None, ge=0, le=100)
+    lifecycle_status: Optional[str] = None
+    lifecycle_reason: Optional[str] = None
+    tlp: Optional[str] = None
+    valid_until: Optional[datetime] = None
+    classification: Optional[str] = None
     tags: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
@@ -1015,7 +1321,15 @@ class IOCEnrichment(BaseModel):
     reputation: Optional[str] = None
     malicious_count: int = 0
     total_reports: int = 0
-    raw_response: Optional[Dict[str, Any]] = None
+    provider_verdict: Optional[str] = None
+    confidence: Optional[int] = None
+    categories: List[str] = Field(default_factory=list)
+    detection_counts: Dict[str, int] = Field(default_factory=dict)
+    provider_references: List[str] = Field(default_factory=list)
+    safe_result: Dict[str, Any] = Field(default_factory=dict)
+    failure_code: Optional[str] = None
+    retryable: bool = False
+    expires_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -1027,6 +1341,27 @@ class IOC(IOCBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    original_value: Optional[str] = None
+    normalized_value: Optional[str] = None
+    display_value: Optional[str] = None
+    risk_score: int = 0
+    risk_reasons: List[Dict[str, Any]] = Field(default_factory=list)
+    risk_score_version: str = "1.0"
+    review_status: str = "pending"
+    reviewed_by: Optional[str] = None
+    first_seen: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    expired_at: Optional[datetime] = None
+    internal_sighting_count: int = 0
+    first_internal_sighting: Optional[datetime] = None
+    last_internal_sighting: Optional[datetime] = None
+    enrichment_status: str = "pending"
+    last_enriched_at: Optional[datetime] = None
+    next_enrichment_at: Optional[datetime] = None
+    false_positive: bool = False
+    allowlisted: bool = False
+    content_hash: Optional[str] = None
     enrichments: List[IOCEnrichment] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -1082,6 +1417,19 @@ class DetectionRule(DetectionRuleBase):
     id: str
     tenant_id: str
     created_by: Optional[str] = None
+    lifecycle_status: str = "draft"
+    detection_kind: str = "event_match"
+    current_version_id: Optional[str] = None
+    production_version_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    team: Optional[str] = None
+    confidence: float = 0.5
+    risk_contribution: int = 0
+    tags: List[str] = Field(default_factory=list)
+    mitre_mappings: List[str] = Field(default_factory=list)
+    data_source_requirements: List[str] = Field(default_factory=list)
+    last_triggered_at: Optional[datetime] = None
+    last_tested_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1118,6 +1466,11 @@ class SecurityEventBase(BaseModel):
     normalized_event: Optional[Dict[str, Any]] = None
     severity: Severity = Severity.MEDIUM
     timestamp: Optional[datetime] = None
+    data_source_id: Optional[str] = None
+    source_event_id: Optional[str] = Field(default=None, max_length=255)
+    idempotency_key: Optional[str] = Field(default=None, max_length=255)
+    format: str = Field(default="json", pattern="^(json|syslog|cef|leef|windows|linux)$")
+    raw_message: Optional[str] = Field(default=None, max_length=262144)
 
 
 class SecurityEventCreate(SecurityEventBase):
@@ -1131,6 +1484,18 @@ class SecurityEvent(SecurityEventBase):
     detection_count: int = 0
     detection_status: str = "none"
     created_at: datetime
+    collector_id: Optional[str] = None
+    batch_id: Optional[str] = None
+    content_fingerprint: Optional[str] = None
+    parser_name: Optional[str] = None
+    parser_version: Optional[str] = None
+    schema_version: str = "1.0"
+    event_category: Optional[str] = None
+    event_class: Optional[str] = None
+    processing_status: str = "accepted"
+    data_quality_score: int = 100
+    data_quality_reasons: List[str] = Field(default_factory=list)
+    normalization_warnings: List[str] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
         
@@ -1164,6 +1529,33 @@ class IngestionResponse(SecurityEvent):
 
 class EventsTodayStats(BaseModel):
     count: int
+
+
+class IngestionBatchRequest(BaseModel):
+    batch_id: str = Field(min_length=1, max_length=100)
+    events: List[SecurityEventCreate] = Field(min_length=1)
+    strict: bool = False
+
+
+class IngestionItemReceipt(BaseModel):
+    index: int
+    status: str
+    event_id: Optional[str] = None
+    duplicate_of: Optional[str] = None
+    error_code: Optional[str] = None
+    message: Optional[str] = None
+
+
+class IngestionBatchReceipt(BaseModel):
+    receipt_id: str
+    batch_id: str
+    replayed: bool = False
+    submitted: int
+    accepted: int
+    duplicates: int
+    rejected: int
+    items: List[IngestionItemReceipt]
+    received_at: datetime
 
 
 # Incident Comment Schemas
@@ -1685,6 +2077,14 @@ class CollectorBase(BaseModel):
     hostname: Optional[str] = None
     log_source_id: Optional[str] = None
 
+    @field_validator("log_source_id", mode="before")
+    @classmethod
+    def normalize_optional_log_source_id(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
 
 class CollectorCreate(CollectorBase):
     pass
@@ -1702,12 +2102,102 @@ class Collector(CollectorBase):
     last_seen: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    health_status: str = "offline"
+    collector_version: Optional[str] = None
+    platform: Optional[str] = None
+    os_version: Optional[str] = None
+    architecture: Optional[str] = None
+    credential_expires_at: Optional[datetime] = None
+    queue_depth: int = 0
+    spool_size_bytes: int = 0
+    dropped_event_count: int = 0
+    events_accepted: int = 0
+    events_rejected: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class CollectorHeartbeat(BaseModel):
-    pass
+    collector_version: Optional[str] = Field(default=None, max_length=50)
+    platform: Optional[str] = Field(default=None, max_length=50)
+    os_version: Optional[str] = Field(default=None, max_length=150)
+    architecture: Optional[str] = Field(default=None, max_length=50)
+    queue_depth: int = Field(default=0, ge=0)
+    spool_size_bytes: int = Field(default=0, ge=0)
+    dropped_event_count: int = Field(default=0, ge=0)
+    events_collected: int = Field(default=0, ge=0)
+    events_submitted: int = Field(default=0, ge=0)
+    retry_count: int = Field(default=0, ge=0)
+    cpu_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    memory_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    disk_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    applied_policy_version: Optional[int] = Field(default=None, ge=1)
+    checkpoint_status: Optional[str] = Field(default=None, max_length=30)
+    uptime_seconds: Optional[int] = Field(default=None, ge=0)
+    service_status: Optional[str] = Field(default=None, max_length=30)
+
+
+class EnrollmentTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+    platform: Optional[str] = Field(default=None, max_length=50)
+    group_id: Optional[str] = None
+    max_uses: int = Field(default=1, ge=1, le=100)
+    expires_minutes: int = Field(default=30, ge=5, le=1440)
+
+
+class EnrollmentTokenResponse(BaseModel):
+    id: str
+    token: str
+    expires_at: datetime
+
+
+class CollectorEnrollRequest(BaseModel):
+    enrollment_token: str
+    name: str = Field(min_length=1, max_length=255)
+    type: str = Field(min_length=1, max_length=100)
+    hostname: Optional[str] = Field(default=None, max_length=255)
+    platform: Optional[str] = Field(default=None, max_length=50)
+    os_version: Optional[str] = Field(default=None, max_length=150)
+    collector_version: Optional[str] = Field(default=None, max_length=50)
+    architecture: Optional[str] = Field(default=None, max_length=50)
+
+
+class DataSourceCreate(BaseModel):
+    source_key: str = Field(min_length=1, max_length=150)
+    name: str = Field(min_length=1, max_length=255)
+    source_type: str = Field(min_length=1, max_length=50)
+    vendor: Optional[str] = Field(default=None, max_length=100)
+    product: Optional[str] = Field(default=None, max_length=100)
+    parser_name: str = Field(default="json", max_length=100)
+    transport: str = Field(default="https", max_length=30)
+    collector_id: Optional[str] = None
+    minimum_quality_score: int = Field(default=0, ge=0, le=100)
+
+
+class DataSourceResponse(DataSourceCreate):
+    id: str
+    tenant_id: str
+    enabled: bool
+    health_status: str
+    accepted_count: int
+    rejected_count: int
+    duplicate_count: int
+    events_per_minute: float
+    ingestion_lag_seconds: Optional[float] = None
+    last_received_at: Optional[datetime] = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeadLetterResponse(BaseModel):
+    id: str
+    stage: str
+    error_code: str
+    safe_error: str
+    state: str
+    attempts: int
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Resolve forward references

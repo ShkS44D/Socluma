@@ -1,15 +1,18 @@
 import threading
 import time
+import platform
+import shutil
 from utils.logger import setup_logger
 
 logger = setup_logger("heartbeat")
 
 class HeartbeatService:
-    def __init__(self, api_client, interval_seconds: int):
+    def __init__(self, api_client, interval_seconds: int, diagnostics_provider=None):
         self.api_client = api_client
         self.interval_seconds = interval_seconds
         self._running = False
         self._thread: threading.Thread | None = None
+        self.diagnostics_provider = diagnostics_provider
 
     def start(self):
         if self._running:
@@ -30,7 +33,18 @@ class HeartbeatService:
     def _run_loop(self):
         while self._running:
             try:
-                self.api_client.send_heartbeat()
+                diagnostics = {
+                    "collector_version": "1.0.0",
+                    "platform": platform.system().lower(),
+                    "os_version": platform.version(),
+                    "architecture": platform.machine(),
+                    "service_status": "running",
+                }
+                if self.diagnostics_provider:
+                    diagnostics.update(self.diagnostics_provider())
+                usage = shutil.disk_usage(".")
+                diagnostics["disk_percent"] = round((usage.used / usage.total) * 100, 2) if usage.total else 0
+                self.api_client.send_heartbeat(diagnostics)
             except Exception as e:
                 logger.error(f"Heartbeat loop error: {e}", exc_info=True)
             

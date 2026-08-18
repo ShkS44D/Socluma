@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from datetime import date, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from src.api.deps import get_current_user, get_db
 from src.models.pydantic import (
@@ -14,7 +17,10 @@ from src.models.pydantic import (
     OrganizationMemberUpdate,
     OrganizationMembership,
     OrganizationUpdate,
+    DeletionPinRequest,
+    OrganizationDeleteRequest,
     OrganizationUsage,
+    OrganizationUsageHistoryItem,
     SubscriptionInfo,
     TenantSwitchRequest,
     Token,
@@ -23,7 +29,9 @@ from src.models.sqlalchemy import AlertSource, Collector, User
 from src.services.audit_service import audit_service
 from src.services.auth_service import auth_service
 from src.services.organization_service import organization_service
+from src.services.approval_service import approval_service
 from src.core.validation import validate_uuid
+from src.core.permissions import Permission, require_all_permissions, require_permission, require_tenant_permission
 
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
@@ -38,16 +46,21 @@ def _client_ip(request: Request) -> str | None:
 
 def _raise(error: ValueError) -> None:
     message = str(error)
-    code = status.HTTP_404_NOT_FOUND if "not found" in message.lower() else status.HTTP_400_BAD_REQUEST
+    normalized = message.lower()
+    if "not found" in normalized:
+        code = status.HTTP_404_NOT_FOUND
+    elif "already exists" in normalized:
+        code = status.HTTP_409_CONFLICT
+    else:
+        code = status.HTTP_400_BAD_REQUEST
     raise HTTPException(status_code=code, detail=message)
 
 
 @router.get("", response_model=list[Organization])
 def list_organizations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ORGANIZATION_VIEW)),
 ):
-    organization_service.ensure_primary_membership(db, current_user)
     return [Organization.model_validate(org) for org in organization_service.list_organizations(db, current_user)]
 
 
@@ -69,16 +82,26 @@ def create_organization(
             resource_id=org.id,
             ip_address=_client_ip(request),
             details={"slug": org.slug},
+            commit=False,
+            strict=True,
         )
+        db.commit()
+        db.refresh(org)
         return Organization.model_validate(org)
     except ValueError as exc:
         _raise(exc)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization could not be created because a unique value already exists",
+        ) from exc
 
 
 @router.get("/current", response_model=Organization)
 def get_current_organization(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ORGANIZATION_VIEW)),
 ):
     try:
         return Organization.model_validate(organization_service.get_organization(db, current_user, current_user.tenant_id))
@@ -111,7 +134,7 @@ def switch_organization(
 def get_organization(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.ORGANIZATION_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -126,7 +149,7 @@ def update_organization(
     data: OrganizationUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.ORGANIZATION_UPDATE)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -146,35 +169,86 @@ def update_organization(
         _raise(exc)
 
 
-@router.delete("/{organization_id}", response_model=Organization)
-def delete_organization(
-    organization_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+@router.put("/{organization_id}/deletion-pin", status_code=status.HTTP_204_NO_CONTENT)
+def set_deletion_pin(
+    organization_id: str, data: DeletionPinRequest, request: Request,
+    db: Session = Depends(get_db), current_user: User = Depends(require_tenant_permission(Permission.ORGANIZATION_SECURITY_MANAGE)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
-        org = organization_service.delete_organization(db, current_user, organization_id)
-        audit_service.record(
+        organization_service.set_deletion_pin(db, current_user, organization_id, data.pin, data.current_password)
+        audit_service.record(db, action="deletion_pin_changed", user=current_user, tenant_id=organization_id,
+                             resource_type="organization", resource_id=organization_id, ip_address=_client_ip(request),
+                             strict=True)
+    except (ValueError, HTTPException) as exc:
+        audit_service.record(db, action="deletion_pin_change_failed", user=current_user, tenant_id=organization_id,
+                             resource_type="organization", resource_id=organization_id, ip_address=_client_ip(request),
+                             status="failure", failure_reason="verification_failed")
+        if isinstance(exc, HTTPException):
+            raise
+        _raise(exc)
+
+
+@router.delete("/{organization_id}", response_model=Organization)
+def delete_organization(
+    organization_id: str,
+    data: OrganizationDeleteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_permission(Permission.ORGANIZATION_DELETE)),
+):
+    validate_uuid(organization_id, "organization_id")
+    try:
+        approval_service.require_and_consume(
             db,
-            action="organization_deleted",
-            user=current_user,
+            current_user,
+            data.approval_id,
+            action_type="organization.delete",
+            target_type="organization",
+            target_id=organization_id,
             tenant_id=organization_id,
-            resource_type="organization",
-            resource_id=organization_id,
-            ip_address=_client_ip(request),
         )
-        return Organization.model_validate(org)
+        return Organization.model_validate(
+            organization_service.delete_organization(db, current_user, organization_id, data.pin)
+        )
+    except HTTPException:
+        raise
     except ValueError as exc:
         _raise(exc)
+
+
+@router.post("/{organization_id}/deletion/cancel", response_model=Organization)
+def cancel_organization_deletion(
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_permission(
+        Permission.ORGANIZATION_DELETE_CANCEL, allow_pending_deletion=True
+    )),
+):
+    validate_uuid(organization_id, "organization_id")
+    return Organization.model_validate(
+        organization_service.cancel_deletion(db, current_user, organization_id)
+    )
+
+
+@router.get("/{organization_id}/deletion/status", response_model=Organization)
+def organization_deletion_status(
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_permission(
+        Permission.ORGANIZATION_DELETE, allow_pending_deletion=True
+    )),
+):
+    validate_uuid(organization_id, "organization_id")
+    _, org = organization_service._require_lifecycle_owner(db, current_user, organization_id)
+    return Organization.model_validate(org)
 
 
 @router.get("/{organization_id}/members", response_model=list[OrganizationMembership])
 def list_members(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.USERS_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -198,7 +272,9 @@ def update_member(
     validate_uuid(organization_id, "organization_id")
     validate_uuid(membership_id, "membership_id")
     try:
-        member = organization_service.update_member(db, current_user, organization_id, membership_id, data.role, data.is_active)
+        member = organization_service.update_member(
+            db, current_user, organization_id, membership_id, data.role, data.is_active, data.custom_role_id
+        )
         audit_service.record(
             db,
             action="organization_membership_updated",
@@ -218,7 +294,7 @@ def update_member(
 def list_invitations(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.USERS_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -308,7 +384,7 @@ def reject_invitation(
 def get_usage(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.USAGE_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -317,11 +393,36 @@ def get_usage(
         _raise(exc)
 
 
+@router.get("/{organization_id}/usage/history", response_model=list[OrganizationUsageHistoryItem])
+def get_usage_history(
+    organization_id: str,
+    start_date: date = Query(default_factory=lambda: date.today() - timedelta(days=30)),
+    end_date: date = Query(default_factory=date.today),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_tenant_permission(Permission.USAGE_VIEW)),
+):
+    validate_uuid(organization_id, "organization_id")
+    if start_date > end_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_code": "usage_date_range_invalid", "message": "start_date must not be after end_date"},
+        )
+    if (end_date - start_date).days > 366:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_code": "usage_date_range_too_large", "message": "Usage history range cannot exceed 366 days"},
+        )
+    return [
+        OrganizationUsageHistoryItem.model_validate(row)
+        for row in organization_service.usage_history(db, current_user, organization_id, start_date, end_date)
+    ]
+
+
 @router.get("/{organization_id}/subscription", response_model=SubscriptionInfo)
 def get_subscription(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.SUBSCRIPTIONS_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     try:
@@ -336,7 +437,7 @@ def get_subscription(
 def list_api_key_inventory(
     organization_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_tenant_permission(Permission.API_KEYS_VIEW)),
 ):
     validate_uuid(organization_id, "organization_id")
     organization_service.require_membership(db, current_user, organization_id)

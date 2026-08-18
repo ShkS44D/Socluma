@@ -36,6 +36,9 @@ const IOCFormModal: React.FC<IOCFormModalProps> = ({
     source: '',
     severity: 'medium',
     confidence_score: 0,
+    source_reliability: 50,
+    lifecycle_status: 'new',
+    tlp: 'TLP:AMBER',
     tags: [],
     is_active: true,
   })
@@ -51,6 +54,9 @@ const IOCFormModal: React.FC<IOCFormModalProps> = ({
         source: initialData.source || '',
         severity: initialData.severity || 'medium',
         confidence_score: initialData.confidence_score || 0,
+        source_reliability: initialData.source_reliability ?? 50,
+        lifecycle_status: initialData.lifecycle_status || 'new',
+        tlp: initialData.tlp || 'TLP:AMBER',
         tags: initialData.tags || [],
         is_active: initialData.is_active !== undefined ? initialData.is_active : true,
       })
@@ -63,6 +69,9 @@ const IOCFormModal: React.FC<IOCFormModalProps> = ({
         source: '',
         severity: 'medium',
         confidence_score: 0,
+        source_reliability: 50,
+        lifecycle_status: 'new',
+        tlp: 'TLP:AMBER',
         tags: [],
         is_active: true,
       })
@@ -100,9 +109,26 @@ const IOCFormModal: React.FC<IOCFormModalProps> = ({
                 }
               >
                 <MenuItem value="ip">IP Address</MenuItem>
+                <MenuItem value="ipv4">IPv4</MenuItem>
+                <MenuItem value="ipv6">IPv6</MenuItem>
+                <MenuItem value="cidr">CIDR</MenuItem>
                 <MenuItem value="domain">Domain</MenuItem>
                 <MenuItem value="url">URL</MenuItem>
+                <MenuItem value="email">Email Address</MenuItem>
                 <MenuItem value="hash">Hash</MenuItem>
+                <MenuItem value="md5">MD5</MenuItem>
+                <MenuItem value="sha1">SHA-1</MenuItem>
+                <MenuItem value="sha256">SHA-256</MenuItem>
+                <MenuItem value="sha512">SHA-512</MenuItem>
+                <MenuItem value="file_name">File Name</MenuItem>
+                <MenuItem value="file_path">File Path</MenuItem>
+                <MenuItem value="registry_key">Registry Key</MenuItem>
+                <MenuItem value="mutex">Mutex</MenuItem>
+                <MenuItem value="user_agent">User Agent</MenuItem>
+                <MenuItem value="certificate_fingerprint">Certificate Fingerprint</MenuItem>
+                <MenuItem value="ja3">JA3</MenuItem>
+                <MenuItem value="ja4">JA4</MenuItem>
+                <MenuItem value="cryptocurrency_address">Cryptocurrency Address</MenuItem>
               </Select>
             </FormControl>
             <TextField
@@ -151,6 +177,41 @@ const IOCFormModal: React.FC<IOCFormModalProps> = ({
                 setFormData({ ...formData, confidence_score: Number(e.target.value) })
               }
             />
+            <TextField
+              label="Source Reliability"
+              type="number"
+              fullWidth
+              inputProps={{ min: 0, max: 100 }}
+              value={formData.source_reliability}
+              onChange={(e) =>
+                setFormData({ ...formData, source_reliability: Number(e.target.value) })
+              }
+            />
+            <FormControl fullWidth>
+              <InputLabel>Lifecycle</InputLabel>
+              <Select
+                value={formData.lifecycle_status || 'new'}
+                label="Lifecycle"
+                onChange={(e) => setFormData({ ...formData, lifecycle_status: e.target.value })}
+              >
+                <MenuItem value="new">New</MenuItem>
+                <MenuItem value="under_review">Under Review</MenuItem>
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="monitoring">Monitoring</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>TLP</InputLabel>
+              <Select
+                value={formData.tlp || 'TLP:AMBER'}
+                label="TLP"
+                onChange={(e) => setFormData({ ...formData, tlp: e.target.value })}
+              >
+                {['TLP:CLEAR', 'TLP:GREEN', 'TLP:AMBER', 'TLP:AMBER+STRICT', 'TLP:RED'].map(value => (
+                  <MenuItem key={value} value={value}>{value}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               label="Tags (comma separated)"
               fullWidth

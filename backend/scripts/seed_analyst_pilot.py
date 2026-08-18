@@ -208,7 +208,7 @@ def seed() -> list[Incident]:
     original_ai_analysis = incident_service._run_ai_analysis
     original_threat_lookup = threat_intel_service.lookup_incident_indicators
     try:
-        # Fixture creation must never consume paid AI credits. Copilot is tested
+        # Fixture creation must never consume paid AI credits. Triage AI is tested
         # separately through its normal endpoint during the controlled smoke test.
         incident_service._run_ai_analysis = lambda *_args, **_kwargs: None
         threat_intel_service.lookup_incident_indicators = lambda *_args, **_kwargs: []

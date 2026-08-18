@@ -1,10 +1,10 @@
-import re
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from limits import parse as parse_rate_limit
 from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from src.api.deps import get_current_user, get_db, require_roles
+from src.api.deps import get_current_user, get_db
+from src.core.permissions import Permission, require_permission
 from src.core.config import get_settings
 from src.core.security import (
     verify_password,
@@ -12,7 +12,7 @@ from src.core.security import (
 )
 from src.core.logging import logger
 from src.core.observability import AUTH_ATTEMPTS
-from src.models.sqlalchemy import OrganizationRole, User, Tenant, UserRole
+from src.models.sqlalchemy import OrganizationMembership, OrganizationRole, User, Tenant, UserRole
 from src.models.pydantic import (
     LogoutRequest,
     MessageResponse,
@@ -21,11 +21,15 @@ from src.models.pydantic import (
     UserCreate,
     UserLogin,
     UserUpdate,
+    OrganizationMemberUpdate,
     User as UserResponse,
     Token
 )
 from src.services.audit_service import audit_service
 from src.services.auth_service import auth_service
+from src.services.account_security_service import account_security_service
+from src.services.auth_email_service import auth_email_service
+from src.services.password_policy import PasswordPolicyError, validate_new_password
 from src.services.organization_service import organization_service
 from src.utils.datetime_utils import get_utc_now
 
@@ -37,16 +41,6 @@ def get_limiter():
     from src.main import limiter
     return limiter
 
-# Password policy regex
-PASSWORD_PATTERN = re.compile(
-    r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]).{11,}$'
-)
-
-
-def validate_password(password: str) -> bool:
-    return bool(PASSWORD_PATTERN.match(password))
-
-
 def _client_ip(request: Request) -> str | None:
     forwarded_for = request.headers.get("x-forwarded-for")
     if forwarded_for:
@@ -54,14 +48,15 @@ def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-def _check_rate_limit(limiter: Limiter, request: Request, limit: str, scope: str) -> None:
+def _check_rate_limit(limiter: Limiter, request: Request, limit: str, scope: str, account: str = "") -> None:
     if request.client and request.client.host == "testclient":
         return
-    key = f"{scope}:{get_remote_address(request)}"
+    key = f"{scope}:{get_remote_address(request)}:{account.casefold().strip()}"
     if not limiter.limiter.hit(parse_rate_limit(limit), key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again later.",
+            detail={"error_code": "RATE_LIMITED", "message": "Too many requests. Please try again later."},
+            headers={"Retry-After": "60"},
         )
 
 
@@ -73,11 +68,13 @@ def register(user_data: UserCreate, request: Request, db: Session = Depends(get_
     logger.info(f"Registering user: {user_data.email}")
     
     # Validate password policy first
-    if not validate_password(user_data.password):
+    try:
+        validate_new_password(user_data.password, email=user_data.email, full_name=user_data.full_name)
+    except PasswordPolicyError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 11 characters long and include uppercase, lowercase, number, and special character"
-        )
+            detail={"error_code": "PASSWORD_POLICY", "message": str(exc)},
+        ) from exc
     
     # Check if user already exists - but don't reveal it (fix user enumeration)
     existing_user = db.query(User).filter(User.email == user_data.email).first()
@@ -119,7 +116,7 @@ def register(user_data: UserCreate, request: Request, db: Session = Depends(get_
     user_role = UserRole.ADMIN if existing_tenant_users == 0 else UserRole.ANALYST
     hashed_password = get_password_hash(user_data.password)
     user = User(
-        email=user_data.email,
+        email=user_data.email.casefold().strip(),
         full_name=user_data.full_name,
         hashed_password=hashed_password,
         tenant_id=tenant.id,
@@ -142,6 +139,13 @@ def register(user_data: UserCreate, request: Request, db: Session = Depends(get_
         ip_address=_client_ip(request),
         details={"email": user.email, "tenant_slug": tenant.slug},
     )
+    if settings.EMAIL_VERIFICATION_REQUIRED:
+        token = account_security_service.issue_one_time_token(
+            db, user, "email_verification", settings.EMAIL_VERIFICATION_TOKEN_MINUTES, request,
+        )
+        auth_email_service.verification(
+            user.email, f"{settings.FRONTEND_PUBLIC_URL}/verify-email?token={token}",
+        )
     
     return user
 
@@ -149,11 +153,12 @@ def register(user_data: UserCreate, request: Request, db: Session = Depends(get_
 @router.post("/login", response_model=Token)
 def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db), limiter: Limiter = Depends(get_limiter)):
     # Apply rate limit (5 requests/minute per IP)
-    _check_rate_limit(limiter, request, "5/minute", "auth_login")
+    normalized_email = user_data.email.casefold().strip()
+    _check_rate_limit(limiter, request, "5/minute", "auth_login", normalized_email)
     
     logger.info(f"Login attempt for: {user_data.email}")
     
-    user = db.query(User).filter(User.email == user_data.email).first()
+    user = db.query(User).filter(User.email == normalized_email).first()
     
     if user and auth_service.is_locked(user):
         AUTH_ATTEMPTS.labels("locked").inc()
@@ -172,7 +177,7 @@ def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db),
         )
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
-            detail="Account is temporarily locked. Please try again later.",
+            detail={"error_code": "ACCOUNT_LOCKED", "message": "Account is temporarily locked. Please try again later."},
         )
 
     login_valid = (
@@ -197,14 +202,49 @@ def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db),
             ip_address=_client_ip(request),
             details={"email": user_data.email, "locked": locked},
         )
+        if user:
+            account_security_service.record_event(
+                db, user, "login_failed", request=request, result="failure",
+                severity="suspicious" if locked else "informational",
+                reason_code="account_locked" if locked else "invalid_credentials",
+            )
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED if locked else status.HTTP_401_UNAUTHORIZED,
-            detail="Account is temporarily locked. Please try again later." if locked else "Incorrect email or password",
+            detail=(
+                {"error_code": "ACCOUNT_LOCKED", "message": "Account is temporarily locked. Please try again later."}
+                if locked else
+                {"error_code": "AUTHENTICATION_FAILED", "message": "Incorrect email or password"}
+            ),
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if (
+        settings.EMAIL_VERIFICATION_REQUIRED
+        and not user.email_verified_at
+        and not user.email_verification_exempt
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "EMAIL_NOT_VERIFIED", "message": "Email verification is required"},
+        )
+    if user.mfa_enabled_at:
+        challenge = account_security_service.create_challenge(db, user, request)
+        return Token(mfa_required=True, challenge_token=challenge, expires_in=settings.MFA_CHALLENGE_MINUTES * 60)
+
+    reasons = account_security_service.suspicious_login_reasons(db, user, request)
     auth_service.record_successful_login(db, user)
     token_pair = auth_service.create_token_pair(db, user, request=request)
+    account_security_service.record_event(
+        db, user, "login_success", request=request,
+        severity="suspicious" if reasons else "informational",
+        reason_code=reasons[0] if reasons else None,
+        details={"reason_codes": reasons},
+    )
+    account_security_service.record_event(db, user, "session_created", request=request)
+    if reasons:
+        auth_email_service.security_notice(
+            user.email, "Suspicious sign-in", "A sign-in with unusual account-security signals was detected.",
+        )
     AUTH_ATTEMPTS.labels("success").inc()
     
     logger.info(f"Login successful for: {user_data.email}")
@@ -265,6 +305,7 @@ def logout(
         ip_address=_client_ip(request),
         details={"revoked": bool(revoked)},
     )
+    account_security_service.record_event(db, current_user, "logout", request=request)
     return MessageResponse(detail="Logged out successfully")
 
 
@@ -284,6 +325,10 @@ def logout_all(
         resource_id=current_user.id,
         ip_address=_client_ip(request),
         details={"revoked_count": revoked_count},
+    )
+    account_security_service.record_event(
+        db, current_user, "logout_all", request=request,
+        details={"revoked_sessions": revoked_count},
     )
     return MessageResponse(detail="All sessions have been revoked")
 
@@ -311,11 +356,17 @@ def change_password(
             detail="Current password is incorrect",
         )
 
-    if not validate_password(password_data.new_password):
+    try:
+        validate_new_password(
+            password_data.new_password,
+            email=current_user.email,
+            full_name=current_user.full_name,
+        )
+    except PasswordPolicyError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 11 characters long and include uppercase, lowercase, number, and special character"
-        )
+            detail={"error_code": "PASSWORD_POLICY", "message": str(exc)},
+        ) from exc
 
     current_user.hashed_password = get_password_hash(password_data.new_password)
     current_user.password_changed_at = get_utc_now()
@@ -332,6 +383,13 @@ def change_password(
         ip_address=_client_ip(request),
         details={"revoked_sessions": revoked_count},
     )
+    account_security_service.record_event(
+        db, current_user, "password_change", request=request,
+        details={"revoked_sessions": revoked_count},
+    )
+    auth_email_service.security_notice(
+        current_user.email, "Password changed", "Your TriageOps password was changed.",
+    )
     return MessageResponse(detail="Password changed successfully")
 
 
@@ -339,11 +397,15 @@ def change_password(
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.USERS_VIEW)),
 ):
     return (
         db.query(User)
-        .filter(User.tenant_id == current_user.tenant_id)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .filter(
+            OrganizationMembership.tenant_id == current_user.tenant_id,
+            OrganizationMembership.is_active.is_(True),
+        )
         .order_by(User.full_name.asc(), User.email.asc())
         .all()
     )
@@ -353,11 +415,13 @@ def list_users(
 def get_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.USERS_VIEW)),
 ):
-    user = db.query(User).filter(
+    user = db.query(User).join(
+        OrganizationMembership, OrganizationMembership.user_id == User.id
+    ).filter(
         User.id == user_id,
-        User.tenant_id == current_user.tenant_id
+        OrganizationMembership.tenant_id == current_user.tenant_id,
     ).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -369,24 +433,26 @@ def update_user(
     user_id: str,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.USERS_UPDATE)),
 ):
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.tenant_id == current_user.tenant_id
+    membership = db.query(OrganizationMembership).filter_by(
+        user_id=user_id, tenant_id=current_user.tenant_id
     ).first()
+    user = db.get(User, user_id) if membership else None
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    # Check if admin is trying to modify their own account
+    if user_data.role is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "ROLE_ASSIGNMENT_DENIED",
+                "message": "Use the organization membership role-assignment endpoint",
+            },
+        )
+
+    # Account identity is global, while activation and authority are membership-scoped.
     if user.id == current_user.id:
-        # Prevent role change
-        if user_data.role is not None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot modify your own administrator privileges"
-            )
-        # Prevent deactivating self
         if user_data.is_active is not None and not user_data.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -395,10 +461,15 @@ def update_user(
     
     if user_data.full_name is not None:
         user.full_name = user_data.full_name
-    if user_data.role is not None:
-        user.role = user_data.role
     if user_data.is_active is not None:
-        user.is_active = user_data.is_active
+        organization_service.update_member(
+            db,
+            current_user,
+            current_user.tenant_id,
+            membership.id,
+            None,
+            user_data.is_active,
+        )
     
     db.commit()
     db.refresh(user)
@@ -410,13 +481,12 @@ def update_user(
 def delete_user(
     user_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.USERS_DISABLE)),
 ):
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.tenant_id == current_user.tenant_id
+    membership = db.query(OrganizationMembership).filter_by(
+        user_id=user_id, tenant_id=current_user.tenant_id
     ).first()
-    if not user:
+    if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
     if user.id == current_user.id:
@@ -425,9 +495,15 @@ def delete_user(
             detail="Cannot deactivate your own administrator account"
         )
     
-    user.is_active = False
-    db.commit()
-    logger.info(f"Deactivated user: {user.id}")
+    organization_service.update_member(
+        db,
+        current_user,
+        current_user.tenant_id,
+        membership.id,
+        None,
+        False,
+    )
+    logger.info(f"Deactivated organization membership: {membership.id}")
 
 
 @router.get("/me", response_model=UserResponse)

@@ -31,6 +31,7 @@ venv.bak/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
 .coverage
 .coverage.*
 coverage.xml
@@ -49,6 +50,9 @@ coverage/
 playwright-report/
 test-results/
 .vite/
+.eslintcache
+.parcel-cache/
+.turbo/
 
 # Runtime data and logs
 *.db
@@ -58,6 +62,13 @@ test-results/
 *.log
 *.log.*
 logs/
+tmp/
+temp/
+uploads/
+output/
+backend/data/ioc-artifacts/
+collector-agent/data/
+*.pid
 
 # Secrets, certificates, and local credentials
 *.pem
@@ -68,11 +79,18 @@ logs/
 *.p12
 credentials*.json
 service-account*.json
+.secrets/
+secrets/
+*.secret
+*.credentials
 
 # Local backups and generated validation output
 *.zip
 *.tar
 *.tar.gz
+*.tgz
+*.7z
+*.rar
 backups/
 backend/validation/
 backend/validation-*

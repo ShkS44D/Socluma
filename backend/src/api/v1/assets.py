@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from src.api.deps import get_db, get_current_user, require_roles
+from src.api.deps import get_db, get_current_user
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import Asset, AssetCreate, AssetUpdate
-from src.models.sqlalchemy import AssetCriticality, User, UserRole
+from src.models.sqlalchemy import AssetCriticality, User
 from src.services.asset_service import asset_service
 from src.services.audit_service import audit_service
 
@@ -24,7 +25,7 @@ def create_asset(
     asset_data: AssetCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.ASSETS_MANAGE)),
 ):
     try:
         asset = asset_service.create_asset(db, current_user.tenant_id, asset_data)
@@ -47,7 +48,7 @@ def list_assets(
     criticality: Optional[AssetCriticality] = Query(None),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ASSETS_VIEW)),
 ):
     assets = asset_service.list_assets(db, current_user.tenant_id, criticality=criticality, search=search)
     return [Asset.model_validate(asset) for asset in assets]
@@ -57,7 +58,7 @@ def list_assets(
 def get_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ASSETS_VIEW)),
 ):
     try:
         asset = asset_service.get_asset_by_id(db, current_user.tenant_id, asset_id)
@@ -72,7 +73,7 @@ def update_asset(
     update_data: AssetUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.ASSETS_MANAGE)),
 ):
     try:
         asset = asset_service.update_asset(db, current_user.tenant_id, asset_id, update_data)
@@ -94,7 +95,7 @@ def delete_asset(
     asset_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.ASSETS_MANAGE)),
 ):
     try:
         asset_service.delete_asset(db, current_user.tenant_id, asset_id)

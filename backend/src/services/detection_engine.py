@@ -1,17 +1,21 @@
 from __future__ import annotations
 from typing import Optional, Dict, Any, List
+from datetime import timedelta
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_
 from dataclasses import dataclass
 import logging
 import yaml
 
 from src.models.sqlalchemy import (
     DetectionRule, RuleType, Severity, SecurityEvent, Alert, AlertSource,
-    DetectionMatch as DetectionMatchModel, AlertStatus
+    DetectionMatch as DetectionMatchModel, DetectionRuleVersion, AlertStatus,
+    DetectionException, DetectionMaintenanceWindow, DetectionSuppressionPolicy,
 )
 from src.models.pydantic import AlertCreate
 from src.services.incident_service import incident_service
 from src.services.sigma_rule_service import sigma_rule_service
+from src.services.detection_lifecycle_service import detection_lifecycle_service
 from src.services.websocket_service import broadcast_notification_sync, NotificationType
 from src.core.config import get_settings
 from src.core.observability import ALERTS_CREATED, timed_detection
@@ -50,8 +54,45 @@ class DetectionEngine:
         
         enabled_rules = db.query(DetectionRule).filter(
             DetectionRule.tenant_id == tenant_id,
-            DetectionRule.enabled == True
+            DetectionRule.enabled == True,
         ).all()
+        # Compatibility for rules created by older releases or fixtures before
+        # migration 1800. Persist an explicit immutable production version before
+        # evaluating so every new match still has exact provenance.
+        for rule in enabled_rules:
+            if rule.production_version_id:
+                continue
+            definition = rule.rule_content or {
+                "kind": "event_match",
+                "conditions": [
+                    {"field": key, "operator": "eq", "value": value}
+                    for key, value in (rule.condition or {}).items()
+                ],
+            }
+            version = detection_lifecycle_service.create_version(
+                db,
+                rule,
+                rule.created_by,
+                definition,
+                original_content=rule.sigma_rule,
+                summary="Legacy rule compatibility migration",
+            )
+            version.lifecycle_status = "production"
+            version.test_result = {"status": "passed", "source": "legacy_compatibility"}
+            version.published_at = get_utc_now()
+            rule.current_version_id = version.id
+            rule.production_version_id = version.id
+            rule.lifecycle_status = "production"
+            rule.enabled = True
+        if enabled_rules:
+            db.flush()
+        versions = {
+            version.id: version
+            for version in db.query(DetectionRuleVersion).filter(
+                DetectionRuleVersion.tenant_id == tenant_id,
+                DetectionRuleVersion.id.in_([rule.production_version_id for rule in enabled_rules]),
+            ).all()
+        } if enabled_rules else {}
         rule_ids = [rule.id for rule in enabled_rules]
         existing_matches = {}
         if rule_ids:
@@ -87,7 +128,8 @@ class DetectionEngine:
                 ))
                 continue
                 
-            match_result = self._match_rule(rule, event)
+            version = versions.get(rule.production_version_id)
+            match_result = self._match_version(db, tenant_id, rule, version, event)
             logger.info(
                 "Detection rule evaluated",
                 extra={
@@ -101,13 +143,29 @@ class DetectionEngine:
                 },
             )
             if match_result['matched']:
+                version = versions.get(rule.production_version_id)
+                control = self._evaluate_controls(db, tenant_id, rule, event)
                 match = DetectionMatchModel(
                     tenant_id=tenant_id,
                     event_id=event.id,
                     rule_id=rule.id,
                     matched=True,
-                    severity=rule.severity
+                    severity=rule.severity,
+                    rule_version_id=version.id if version else None,
+                    rule_content_hash=version.content_hash if version else None,
+                    detection_type=rule.detection_kind,
+                    contributing_event_ids=match_result.get("contributing_event_ids") or [event.id],
+                    matched_conditions=[match_result.get("matched_condition")],
+                    exceptions_evaluated=control["exceptions"],
+                    suppression_result=control["suppression"],
+                    confidence=rule.confidence,
+                    risk_contribution=rule.risk_contribution,
+                    mitre_mappings=rule.mitre_mappings or ([rule.mitre_technique_id] if rule.mitre_technique_id else []),
+                    data_source_provenance={"collector_id": event.collector_id, "data_source_id": event.data_source_id,
+                                            "parser_version": event.parser_version, "schema_version": event.schema_version},
+                    explanation={"why_matched": match_result.get("why_matched"), "controls": control},
                 )
+                rule.last_triggered_at = get_utc_now()
                 db.add(match)
                 matches.append((match, match_result))
         
@@ -141,6 +199,8 @@ class DetectionEngine:
                 "severity": match.severity.value,
                 "mitre_technique_id": match.rule.mitre_technique_id
             })
+            if (match.suppression_result or {}).get("suppressed"):
+                continue
             
             alert = self.create_alert_from_match(db, tenant_id, match, event, match_result, source_id=source_id)
             
@@ -201,43 +261,26 @@ class DetectionEngine:
         result = {'matched': False, 'matched_condition': None, 'why_matched': None}
         
         try:
-            # Check if we have the new condition field
-            if rule.condition:
-                condition = rule.condition
-                if isinstance(condition, dict):
-                    matched, details = self._evaluate_condition(condition, combined_event)
-                    if matched:
-                        result['matched'] = True
-                        result['matched_condition'] = str(condition)
-                        result['why_matched'] = details
-                        return result
-            
-            # Fallback to old format: check query or sigma_rule
+            if rule.condition and isinstance(rule.condition, dict):
+                matched, details = self._evaluate_condition(rule.condition, combined_event)
+                if matched:
+                    return {"matched": True, "matched_condition": str(rule.condition), "why_matched": details}
             if rule.query:
                 matched, details = self._match_query(rule.query, combined_event)
                 if matched:
-                    result['matched'] = True
-                    result['matched_condition'] = rule.query
-                    result['why_matched'] = details
-                    return result
+                    return {"matched": True, "matched_condition": rule.query, "why_matched": details}
                 
             if rule.rule_type == RuleType.SIGMA and rule.rule_content:
                 explanation = sigma_rule_service.explain(rule.rule_content, combined_event)
                 matched, details = explanation["matched"], explanation["summary"]
                 if matched:
-                    result['matched'] = True
-                    result['matched_condition'] = str(rule.rule_content.get("detection", {}))
-                    result['why_matched'] = details
-                    result['match_explanation'] = explanation
-                    return result
+                    return {"matched": True, "matched_condition": str(rule.rule_content.get("detection", {})),
+                            "why_matched": details, "match_explanation": explanation}
 
             if rule.sigma_rule:
                 matched, details = self._match_sigma_rule(rule.sigma_rule, combined_event)
                 if matched:
-                    result['matched'] = True
-                    result['matched_condition'] = rule.sigma_rule
-                    result['why_matched'] = details
-                    return result
+                    return {"matched": True, "matched_condition": rule.sigma_rule, "why_matched": details}
             
             # If we have rule_content, check that directly too
             if rule.rule_content:
@@ -247,15 +290,132 @@ class DetectionEngine:
                 if 'detection' in rule.rule_content:
                     matched, details = sigma_rule_service.match(rule.rule_content, combined_event)
                     if matched:
-                        result['matched'] = True
-                        result['matched_condition'] = str(rule.rule_content['detection'])
-                        result['why_matched'] = details
-                        return result
+                        return {"matched": True, "matched_condition": str(rule.rule_content["detection"]), "why_matched": details}
         except Exception:
             logger.exception("Exception matching detection rule", extra={"rule_id": rule.id, "rule_name": rule.name, "event_id": event.id})
-        
         return result
-            
+
+    def _match_version(
+        self,
+        db: Session,
+        tenant_id: str,
+        rule: DetectionRule,
+        version: DetectionRuleVersion | None,
+        event: SecurityEvent,
+    ) -> Dict[str, Any]:
+        if not version:
+            return self._match_rule(rule, event)
+        definition = version.normalized_definition or {}
+        if version.rule_language == "sigma" and definition.get("detection"):
+            combined = {
+                **(event.raw_event or {}), **(event.normalized_event or {}),
+                "raw_data": event.raw_event or {}, "normalized_event": event.normalized_event or {},
+                "event_data": (event.raw_event or {}).get("EventData") or {},
+                "source": event.source,
+                "event_type": event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+            }
+            explanation = sigma_rule_service.explain(definition, combined)
+            return {"matched": bool(explanation["matched"]), "matched_condition": str(definition.get("detection", {})),
+                    "why_matched": explanation["summary"], "match_explanation": explanation}
+        kind = definition.get("kind", "event_match")
+        if kind != "event_match":
+            window = int(definition.get("window_seconds") or settings.DETECTION_MIN_WINDOW_SECONDS)
+            start = event.timestamp - timedelta(seconds=window)
+            if kind == "correlation":
+                required = definition.get("rule_ids") or []
+                historical = db.query(DetectionMatchModel).filter(
+                    DetectionMatchModel.tenant_id == tenant_id,
+                    DetectionMatchModel.rule_id.in_(required),
+                    DetectionMatchModel.triggered_at >= start,
+                    DetectionMatchModel.triggered_at <= event.timestamp,
+                ).order_by(DetectionMatchModel.triggered_at).limit(
+                    settings.DETECTION_MAX_AGGREGATION_CARDINALITY
+                ).all()
+            else:
+                historical = db.query(SecurityEvent).filter(
+                    SecurityEvent.tenant_id == tenant_id,
+                    SecurityEvent.timestamp >= start,
+                    SecurityEvent.timestamp <= event.timestamp,
+                ).order_by(SecurityEvent.timestamp).limit(
+                    settings.DETECTION_MAX_AGGREGATION_CARDINALITY
+                ).all()
+            result = detection_lifecycle_service.evaluate_events(definition, historical)
+            matched = result["estimated_alert_count"] > 0
+            contributing = [
+                item.get("event_id")
+                for item in result.get("example_matches", [])
+                if item.get("event_id")
+            ]
+            return {
+                "matched": matched,
+                "matched_condition": str(definition),
+                "why_matched": (
+                    f"{kind} rule matched {result['matches']} contributing records"
+                    if matched else f"{kind} criteria not met"
+                ),
+                "contributing_event_ids": contributing or [event.id],
+                "evaluation": result,
+            }
+        matched = detection_lifecycle_service._event_matches(definition.get("conditions") or [], event)
+        return {"matched": matched, "matched_condition": str(definition.get("conditions") or []),
+                "why_matched": "Versioned structured conditions matched" if matched else "Versioned structured conditions did not match"}
+
+    def _evaluate_controls(
+        self,
+        db: Session,
+        tenant_id: str,
+        rule: DetectionRule,
+        event: SecurityEvent,
+    ) -> dict[str, Any]:
+        now = get_utc_now()
+        evaluated = []
+        suppressed, reason = False, None
+        exceptions = db.query(DetectionException).filter(
+            DetectionException.tenant_id == tenant_id,
+            DetectionException.status == "active",
+            DetectionException.expires_at > now,
+            or_(DetectionException.rule_id.is_(None), DetectionException.rule_id == rule.id),
+        ).all()
+        for exception in exceptions:
+            criteria = exception.criteria or {}
+            condition = criteria if "field" in criteria else None
+            matched = bool(
+                condition and detection_lifecycle_service._event_matches([condition], event)
+            )
+            evaluated.append({"exception_id": exception.id, "matched": matched})
+            if matched:
+                suppressed, reason = True, "exception"
+        windows = db.query(DetectionMaintenanceWindow).filter(
+            DetectionMaintenanceWindow.tenant_id == tenant_id,
+            DetectionMaintenanceWindow.status.in_(["scheduled", "active"]),
+            DetectionMaintenanceWindow.starts_at <= now,
+            DetectionMaintenanceWindow.ends_at >= now,
+        ).all()
+        for window in windows:
+            scope = window.scope or {}
+            if not scope.get("rule_ids") or rule.id in scope.get("rule_ids", []):
+                suppressed, reason = True, "maintenance_window"
+        policy = db.query(DetectionSuppressionPolicy).filter_by(
+            tenant_id=tenant_id, rule_id=rule.id, enabled=True
+        ).first()
+        if policy and not suppressed:
+            since = now - timedelta(seconds=policy.window_seconds)
+            count = db.query(DetectionMatchModel).filter(
+                DetectionMatchModel.tenant_id == tenant_id,
+                DetectionMatchModel.rule_id == rule.id,
+                DetectionMatchModel.triggered_at >= since,
+            ).count()
+            if count >= policy.maximum_alerts:
+                suppressed, reason = True, "rate_policy"
+        return {
+            "exceptions": evaluated,
+            "suppression": {
+                "suppressed": suppressed,
+                "reason": reason,
+                "match_preserved": True,
+            },
+        }
+
     def _match_query(self, query: str, event: Dict[str, Any]) -> tuple[bool, str]:
         """Fallback matcher for old query format (yaml)"""
         try:

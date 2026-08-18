@@ -5,7 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user, get_db, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import (
     MessageResponse,
     Playbook,
@@ -31,7 +32,6 @@ from src.models.sqlalchemy import (
     PlaybookStatus,
     PlaybookTriggerType,
     User,
-    UserRole,
 )
 from src.services.audit_service import audit_service
 from src.services.playbook_service import playbook_service
@@ -79,7 +79,7 @@ def create_playbook(
     playbook_data: PlaybookCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_CREATE)),
 ):
     playbook = playbook_service.create_playbook(db, current_user.tenant_id, current_user.id, playbook_data)
     _audit(db, request, current_user, "playbook_created", "playbook", playbook.id, {"name": playbook.name})
@@ -93,7 +93,7 @@ def list_playbooks(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     playbooks = playbook_service.list_playbooks(
         db,
@@ -111,7 +111,7 @@ def execute_playbook(
     execution_data: PlaybookExecutionCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     return _execute_playbook(execution_data, request, db, current_user)
 
@@ -160,7 +160,7 @@ def list_executions(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     if incident_id:
         validate_uuid(incident_id, "incident_id")
@@ -182,7 +182,7 @@ def list_executions(
 def get_execution(
     execution_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -195,7 +195,7 @@ def get_execution(
 def list_execution_steps(
     execution_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -209,7 +209,7 @@ def list_execution_steps(
 def list_execution_logs(
     execution_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -224,7 +224,7 @@ def pause_execution(
     execution_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -240,7 +240,7 @@ def resume_execution(
     execution_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -256,7 +256,7 @@ def cancel_execution(
     execution_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -273,7 +273,7 @@ def approve_execution(
     decision: PlaybookApprovalDecision,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_APPROVE)),
 ):
     validate_uuid(execution_id, "execution_id")
     try:
@@ -289,7 +289,7 @@ def list_approvals(
     execution_id: Optional[str] = None,
     status_filter: Optional[PlaybookApprovalStatus] = Query(None, alias="status"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     if execution_id:
         validate_uuid(execution_id, "execution_id")
@@ -303,7 +303,7 @@ def approve_by_id(
     decision: PlaybookApprovalDecision,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_APPROVE)),
 ):
     validate_uuid(approval_id, "approval_id")
     try:
@@ -320,7 +320,7 @@ def reject_approval(
     decision: PlaybookApprovalDecision,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_APPROVE)),
 ):
     validate_uuid(approval_id, "approval_id")
     try:
@@ -336,7 +336,7 @@ def list_variables(
     playbook_id: Optional[str] = None,
     scope: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     if playbook_id:
         validate_uuid(playbook_id, "playbook_id")
@@ -349,7 +349,7 @@ def create_variable(
     data: PlaybookVariableCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     try:
         variable = playbook_service.create_variable(db, current_user.tenant_id, current_user.id, data)
@@ -365,7 +365,7 @@ def update_variable(
     data: PlaybookVariableUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(variable_id, "variable_id")
     try:
@@ -381,7 +381,7 @@ def delete_variable(
     variable_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(variable_id, "variable_id")
     try:
@@ -395,7 +395,7 @@ def delete_variable(
 def get_playbook(
     playbook_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     playbook = playbook_service.get_playbook(db, current_user.tenant_id, playbook_id)
@@ -410,7 +410,7 @@ def update_playbook(
     update_data: PlaybookUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -426,7 +426,7 @@ def delete_playbook(
     playbook_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -443,7 +443,7 @@ def create_version(
     version_data: PlaybookVersionCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -458,7 +458,7 @@ def create_version(
 def list_versions(
     playbook_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -474,7 +474,7 @@ def publish_version(
     version_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_PUBLISH)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     validate_uuid(version_id, "version_id")
@@ -491,7 +491,7 @@ def activate_playbook(
     playbook_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_PUBLISH)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -507,7 +507,7 @@ def deactivate_playbook(
     playbook_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_PUBLISH)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -524,7 +524,7 @@ def add_step(
     step_data: PlaybookStepCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_UPDATE)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     try:
@@ -539,7 +539,7 @@ def add_step(
 def list_steps(
     playbook_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_VIEW)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     playbook = playbook_service.get_playbook(db, current_user.tenant_id, playbook_id)
@@ -555,7 +555,7 @@ def execute_playbook_by_id(
     execution_data: PlaybookExecutionCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER)),
+    current_user: User = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     validate_uuid(playbook_id, "playbook_id")
     execution_data.playbook_id = playbook_id

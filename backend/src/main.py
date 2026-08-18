@@ -1,5 +1,8 @@
 import time
 import uuid
+from pathlib import Path
+from alembic.config import Config as AlembicConfig
+from alembic.script import ScriptDirectory
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -9,6 +12,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from starlette.datastructures import Headers
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -36,14 +40,16 @@ from src.core.security import get_password_hash
 from src.core.database import engine, create_tables, SessionLocal
 from src.models.sqlalchemy import OrganizationRole, User, Tenant, UserRole, DetectionRule
 import redis
+import gzip
 from sqlalchemy import text
 from swagger_ui_bundle import swagger_ui_path
 from src.models.pydantic import HealthCheck, HealthComponent, HealthStatus
 from src.utils.datetime_utils import get_utc_now
-from src.api.v1 import auth, alerts, incidents, sources, iocs, detection_rules, notifications, assets, events, mitre_techniques, websockets, log_sources, collectors, playbooks, soar, organizations, ai
+from src.api.v1 import auth, account_security, alerts, incidents, sources, iocs, ioc_commercial, detection_rules, detection_lifecycle, notifications, assets, events, mitre_techniques, websockets, log_sources, collectors, playbooks, soar, organizations, ai, telemetry, search_investigations
 from src.services.default_detection_rules import DEFAULT_DETECTION_RULES
 from src.services.mitre_technique_service import mitre_technique_service
 from src.services.organization_service import organization_service
+from src.services.usage_service import usage_service
 
 settings = get_settings()
 settings.validate_for_runtime()
@@ -59,6 +65,8 @@ def _rate_limit_storage_uri() -> str:
         return settings.REDIS_URL
     except Exception:
         logger.exception("Redis unavailable for rate limiting, falling back to in-memory limiter")
+        if settings.is_production():
+            raise RuntimeError("Production startup blocked: Redis is required for distributed rate limiting")
         return "memory://"
 
 
@@ -116,6 +124,19 @@ def bootstrap_default_detection_rules():
                 **rule_data
             )
             db.add(rule)
+            db.flush()
+            from src.services.detection_lifecycle_service import detection_lifecycle_service
+            version = detection_lifecycle_service.create_version(
+                db, rule, None, rule.rule_content or {"kind": "event_match", "conditions": []},
+                original_content=rule.sigma_rule or None, summary="Built-in initial version",
+            )
+            version.lifecycle_status = "production"
+            version.test_result = {"status": "passed", "source": "built_in"}
+            version.published_at = get_utc_now()
+            rule.current_version_id = rule.production_version_id = version.id
+            rule.lifecycle_status = "production"
+            rule.protected = True
+            rule.enabled = True
             created_rules += 1
         
         db.commit()
@@ -174,10 +195,10 @@ def bootstrap_admin():
         # Check if admin user already exists
         existing_user = db.query(User).filter(User.email == settings.ADMIN_EMAIL).first()
         if existing_user:
-            logger.info(f"Admin user {settings.ADMIN_EMAIL} already exists, updating password and ensuring admin role")
-            # Update password hash and ensure admin role
-            hashed_password = get_password_hash(settings.ADMIN_PASSWORD)
-            existing_user.hashed_password = hashed_password
+            logger.info(f"Admin user {settings.ADMIN_EMAIL} already exists, preserving password and ensuring admin role")
+            # Bootstrap credentials are creation-only. Rewriting an existing
+            # password on every restart invalidates user-selected passwords and
+            # breaks current-password verification for security settings.
             existing_user.role = UserRole.ADMIN  # Ensure role remains admin
             existing_user.tenant_id = existing_tenant.id  # Ensure tenant association is correct
             existing_user.is_active = True  # Ensure user is active
@@ -213,26 +234,27 @@ def bootstrap_admin():
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url="/api/v1/openapi.json",
+    version=settings.APP_VERSION,
+    openapi_url="/api/v1/openapi.json" if settings.DOCS_ENABLED else None,
     docs_url=None,
-    redoc_url="/redoc",
+    redoc_url="/redoc" if settings.DOCS_ENABLED else None,
     swagger_ui_init_oauth={
         "usePkceWithAuthorizationCodeGrant": True,
     }
 )
-app.mount("/api/v1/docs/static", StaticFiles(directory=swagger_ui_path), name="swagger-ui-static")
+if settings.DOCS_ENABLED:
+    app.mount("/api/v1/docs/static", StaticFiles(directory=swagger_ui_path), name="swagger-ui-static")
 
-
-@app.get("/docs", include_in_schema=False)
-async def swagger_ui_html():
-    return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
-        title=f"{settings.PROJECT_NAME} - Swagger UI",
-        swagger_js_url="/api/v1/docs/static/swagger-ui-bundle.js",
-        swagger_css_url="/api/v1/docs/static/swagger-ui.css",
-        swagger_favicon_url="/api/v1/docs/static/favicon-32x32.png",
-        swagger_ui_parameters={"persistAuthorization": True},
-    )
+    @app.get("/docs", include_in_schema=False)
+    async def swagger_ui_html():
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url,
+            title=f"{settings.PROJECT_NAME} - Swagger UI",
+            swagger_js_url="/api/v1/docs/static/swagger-ui-bundle.js",
+            swagger_css_url="/api/v1/docs/static/swagger-ui.css",
+            swagger_favicon_url="/api/v1/docs/static/favicon-32x32.png",
+            swagger_ui_parameters={"persistAuthorization": True},
+        )
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -251,7 +273,7 @@ def custom_openapi():
         return app.openapi_schema
     openapi_schema = get_openapi(
         title=settings.PROJECT_NAME,
-        version="1.0.0",
+        version=settings.APP_VERSION,
         openapi_version="3.0.3",
         description="TriageOps API",
         routes=app.routes,
@@ -335,10 +357,12 @@ bootstrap_default_detection_rules()
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(account_security.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(incidents.router, prefix="/api/v1")
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(iocs.router, prefix="/api/v1")
+app.include_router(ioc_commercial.router, prefix="/api/v1")
 app.include_router(detection_rules.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
@@ -351,6 +375,12 @@ app.include_router(playbooks.router, prefix="/api/v1")
 app.include_router(soar.router, prefix="/api/v1")
 app.include_router(organizations.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
+app.include_router(telemetry.router, prefix="/api/v1")
+app.include_router(search_investigations.router, prefix="/api/v1")
+app.include_router(detection_lifecycle.router, prefix="/api/v1")
+from src.api.v1 import access_control, audit_logs
+app.include_router(access_control.router, prefix="/api/v1")
+app.include_router(audit_logs.router, prefix="/api/v1")
 
 
 # Request observability middleware
@@ -369,8 +399,50 @@ async def add_request_id(request: Request, call_next):
     status_code = 500
     observed = False
     try:
+        body_limit = (
+            settings.INGESTION_MAX_REQUEST_BYTES
+            if request.url.path == "/api/v1/events/ingest/batch"
+            else settings.TELEMETRY_IMPORT_MAX_BYTES
+            if request.url.path == "/api/v1/telemetry/imports"
+            else settings.MAX_REQUEST_BODY_BYTES
+        )
+        if (
+            request.url.path == "/api/v1/events/ingest/batch"
+            and request.headers.get("content-encoding", "").lower() == "gzip"
+        ):
+            compressed = await request.body()
+            try:
+                decompressed = gzip.decompress(compressed)
+            except (gzip.BadGzipFile, OSError):
+                response = JSONResponse(
+                    status_code=400,
+                    content=build_error_response(request, status_code=400, message="Invalid gzip request body", details=None, error_code="invalid_gzip"),
+                )
+            else:
+                if len(decompressed) > body_limit:
+                    response = JSONResponse(
+                        status_code=413,
+                        content=build_error_response(request, status_code=413, message="Request body is too large", details={"max_bytes": body_limit}, error_code="request_body_too_large"),
+                    )
+                else:
+                    consumed = False
+                    async def receive_decompressed():
+                        nonlocal consumed
+                        if consumed:
+                            return {"type": "http.request", "body": b"", "more_body": False}
+                        consumed = True
+                        return {"type": "http.request", "body": decompressed, "more_body": False}
+                    request._receive = receive_decompressed
+                    request.scope["headers"] = [
+                        (key, value) for key, value in request.scope["headers"]
+                        if key not in {b"content-encoding", b"content-length"}
+                    ] + [(b"content-length", str(len(decompressed)).encode())]
+                    request._headers = Headers(scope=request.scope)
+                    response = None
+        else:
+            response = None
         content_length = request.headers.get("content-length")
-        if content_length:
+        if response is None and content_length:
             try:
                 body_size = int(content_length)
             except ValueError:
@@ -386,20 +458,20 @@ async def add_request_id(request: Request, call_next):
                         error_code="invalid_content_length",
                     ),
                 )
-            elif body_size > settings.MAX_REQUEST_BODY_BYTES:
+            elif body_size > body_limit:
                 response = JSONResponse(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     content=build_error_response(
                         request,
                         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                         message="Request body is too large",
-                        details={"max_bytes": settings.MAX_REQUEST_BODY_BYTES},
+                        details={"max_bytes": body_limit},
                         error_code="request_body_too_large",
                     ),
                 )
             else:
                 response = None
-        else:
+        elif response is None:
             response = None
         try:
             response = response or await call_next(request)
@@ -424,6 +496,9 @@ async def add_request_id(request: Request, call_next):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if request.url.path.startswith(("/api/v1/auth", "/api/v1/account/security")):
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
@@ -444,6 +519,28 @@ async def add_request_id(request: Request, call_next):
             "HTTP request completed",
             extra={"method": request.method, "status_code": status_code},
         )
+        tenant_id = getattr(request.state, "tenant_id", None)
+        excluded_usage_paths = (
+            "/health",
+            "/metrics",
+            "/docs",
+            "/redoc",
+            "/api/v1/openapi.json",
+            "/api/v1/docs/static",
+        )
+        if tenant_id and not request.url.path.startswith(excluded_usage_paths):
+            usage_db = SessionLocal()
+            try:
+                usage_service.increment_request(
+                    usage_db,
+                    tenant_id,
+                    triage_ai=request.method == "POST" and request.url.path.startswith("/api/v1/ai/"),
+                )
+            except Exception:
+                usage_db.rollback()
+                logger.exception("Unable to record tenant API usage")
+            finally:
+                usage_db.close()
         return response
     finally:
         if not observed:
@@ -496,7 +593,18 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         logger.error(log_message)
     else:
         logger.warning(log_message)
-    message = exc.detail if isinstance(exc.detail, str) else "Request failed"
+    if isinstance(exc.detail, str):
+        message = exc.detail
+        error_code = None
+        details = None
+    elif isinstance(exc.detail, dict):
+        message = str(exc.detail.get("message") or exc.detail.get("detail") or "Request failed")
+        error_code = exc.detail.get("error_code")
+        details = {key: value for key, value in exc.detail.items() if key not in {"message", "detail", "error_code"}} or None
+    else:
+        message = "Request failed"
+        error_code = None
+        details = exc.detail
     return JSONResponse(
         status_code=exc.status_code,
         headers=exc.headers,
@@ -504,7 +612,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             request,
             status_code=exc.status_code,
             message=message,
-            details=None if isinstance(exc.detail, str) else exc.detail,
+            details=details,
+            error_code=error_code,
         ),
     )
 
@@ -618,8 +727,14 @@ def _check_storage() -> HealthComponent:
 def _check_migration_status() -> HealthComponent:
     started = time.perf_counter()
     try:
+        backend_dir = Path(__file__).resolve().parents[1]
+        alembic_config = AlembicConfig(str(backend_dir / "alembic.ini"))
+        alembic_config.set_main_option("script_location", str(backend_dir / "alembic"))
+        current_head = ScriptDirectory.from_config(alembic_config).get_current_head()
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        if version != current_head:
+            return _component("error", started, f"Database revision {version or 'none'}; required revision {current_head}")
         return _component("ok", started, f"Current revision: {version}")
     except Exception:
         logger.exception("Migration status health check failed")
@@ -644,6 +759,7 @@ def _build_health(include_degraded: bool = True) -> HealthCheck:
         database=checks["database"].status,
         redis=checks["redis"].status,
         request_id=request_id_ctx.get(),
+        version=settings.APP_VERSION,
         environment=settings.ENVIRONMENT,
         timestamp=get_utc_now(),
         checks=checks,
@@ -654,13 +770,16 @@ def _build_health(include_degraded: bool = True) -> HealthCheck:
 @app.get("/health/live", response_model=HealthStatus, tags=["Health"])
 async def liveness_check():
     """Liveness probe - just checks if the app is running"""
-    return HealthStatus(status="ok", request_id=request_id_ctx.get(), timestamp=get_utc_now())
+    return HealthStatus(status="ok", request_id=request_id_ctx.get(), version=settings.APP_VERSION, timestamp=get_utc_now())
 
 
 @app.get("/health/ready", response_model=HealthCheck, tags=["Health"])
 async def readiness_check():
     """Readiness probe - checks if dependencies are available"""
-    return _build_health(include_degraded=False)
+    health = _build_health(include_degraded=False)
+    if health.status == "error":
+        return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=jsonable_encoder(health))
+    return health
 
 
 @app.get("/health", response_model=HealthCheck, tags=["Health"])
@@ -678,4 +797,4 @@ async def prometheus_metrics():
 
 @app.get("/", tags=["Root"])
 async def root():
-    return {"message": f"Welcome to {settings.PROJECT_NAME} API!"}
+    return {"message": f"Welcome to {settings.PROJECT_NAME} API!", "version": settings.APP_VERSION}

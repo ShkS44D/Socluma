@@ -1,0 +1,11 @@
+schema_version: "1.0"
+name: Suspicious PowerShell
+definition:
+  kind: event_match
+  conditions:
+    - field: process.name
+      operator: eq
+      value: powershell.exe
+  data_sources:
+    - windows_process
+  mitre_mappings: []

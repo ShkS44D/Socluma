@@ -15,7 +15,7 @@ const Alerts: React.FC = () => {
       />
       <SectionCard title="Alert Queue">
         <Typography variant="body1" color="text.secondary">
-          Alert management coming soon...
+          Use the operational alert queue to review detection evidence, severity, ownership, and incident correlation.
         </Typography>
       </SectionCard>
     </Stack>

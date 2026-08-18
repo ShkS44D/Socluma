@@ -191,7 +191,7 @@ test.describe('Incident intelligence release-candidate variants', () => {
     assertNoFailures()
   })
 
-  test('Copilot double submit sends one provider request', async ({ page }) => {
+  test('Triage AI double submit sends one provider request', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     let chatRequests = 0
     await login(page)
@@ -209,13 +209,13 @@ test.describe('Incident intelligence release-candidate variants', () => {
     })
     await page.goto(`/ai/incident-copilot?incidentId=${INCIDENT_ID}`)
     await page.getByLabel('Question').fill('Which alert created it?')
-    await page.getByRole('button', { name: 'Ask Copilot' }).dblclick()
+    await page.getByRole('button', { name: 'Ask Triage AI' }).dblclick()
     await expect(page.getByText('One grounded response.')).toBeVisible()
     expect(chatRequests).toBe(1)
     assertNoFailures()
   })
 
-  test('Copilot labels OpenAI and historical Gemini provider metadata safely', async ({ page }) => {
+  test('Triage AI labels OpenAI and historical Gemini provider metadata safely', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     await login(page)
     await page.route(`**/api/v1/ai/incident/${INCIDENT_ID}/conversations**`, async (route) => {
@@ -246,15 +246,15 @@ test.describe('Incident intelligence release-candidate variants', () => {
       provider = 'gemini'
     })
     await page.goto(`/ai/incident-copilot?incidentId=${INCIDENT_ID}`)
-    await page.getByRole('button', { name: 'Ask Copilot' }).click()
+    await page.getByRole('button', { name: 'Ask Triage AI' }).click()
     await expect(page.getByText('OpenAI / gpt-5.6-luna')).toBeVisible()
     await expect(page.getByText('30 tokens (20 in / 10 out)')).toBeVisible()
-    await page.getByRole('button', { name: 'Ask Copilot' }).click()
+    await page.getByRole('button', { name: 'Ask Triage AI' }).click()
     await expect(page.getByText('Gemini (historical) / gemini-historical-snapshot')).toBeVisible()
     assertNoFailures()
   })
 
-  test('Copilot conversation history survives a page reload', async ({ page }) => {
+  test('Triage AI conversation history survives a page reload', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     const conversationId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     const messages = [

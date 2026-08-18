@@ -9,6 +9,7 @@ import {
   AUTH_LOGOUT_EVENT
 } from '../services/api/authStorage'
 import { useEffect } from 'react'
+export { usePermissionStore } from './permissions'
 
 interface AuthState {
   token: string | null

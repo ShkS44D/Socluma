@@ -1,24 +1,34 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Body, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
 from datetime import timedelta
 from copy import deepcopy
 import uuid
+import hashlib
+import hmac
+import json
+from datetime import datetime, timezone
 
-from src.api.deps import get_db, get_current_user, get_current_auth_context, AuthContext, require_roles
+from src.api.deps import get_db, get_current_auth_context, AuthContext
+from src.core.permissions import Permission, membership_permissions, require_all_permissions, require_permission
 from src.api.openapi_examples import EVENT_INGEST_EXAMPLES, SOC_SIMULATION_SCENARIOS
 from src.models.pydantic import (
     SecurityEvent, SecurityEventCreate,
-    EventAnalysisResponse, IngestionResponse, EventsTodayStats
+    EventAnalysisResponse, IngestionResponse, EventsTodayStats,
+    IngestionBatchRequest, IngestionBatchReceipt,
 )
-from src.models.sqlalchemy import EventType, Severity, User, UserRole
+from src.models.sqlalchemy import EventType, Severity, User, IngestionReplayNonce, SecurityEvent as SecurityEventModel
+from src.core.config import get_settings
 from src.services.security_event_service import security_event_service
 from src.services.detection_engine import detection_engine
 from src.services.log_parser_service import log_parser_service
 from src.services.audit_service import audit_service
-from src.utils.datetime_utils import get_utc_now
+from src.utils.datetime_utils import ensure_utc, get_utc_now
 from src.core.observability import COLLECTOR_EVENTS
 from src.core.validation import validate_uuid
+from src.services.telemetry_ingestion_service import telemetry_ingestion_service
+from src.services.entity_investigation_service import entity_investigation_service
+from src.services.websocket_service import NotificationType, broadcast_notification
 
 router = APIRouter(prefix="/events", tags=["Security Events"])
 
@@ -34,12 +44,18 @@ router = APIRouter(prefix="/events", tags=["Security Events"])
     ),
 )
 def ingest_event(
+    background_tasks: BackgroundTasks,
     event_data: SecurityEventCreate = Body(openapi_examples=EVENT_INGEST_EXAMPLES),
     db: Session = Depends(get_db),
     auth_context: AuthContext = Depends(get_current_auth_context),
 ):
     tenant_id = auth_context.tenant_id
     ingestion_source = "collector" if auth_context.collector else "user"
+    if auth_context.user and Permission.ALERTS_CREATE.value not in membership_permissions(db, auth_context.user):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "PERMISSION_DENIED", "message": "Event ingestion permission is required"},
+        )
     
     # Update collector info if authenticated as collector
     if auth_context.collector:
@@ -59,19 +75,30 @@ def ingest_event(
         normalized.setdefault("agent_id", auth_context.collector.id)
         event_data.normalized_event = normalized
     
-    # If normalized event not provided, try to parse raw log
-    if not event_data.normalized_event:
-        source_type = event_data.source
-        parsed = log_parser_service.parse_log(source_type, event_data.raw_event)
-        if parsed:
-            event_data.normalized_event = parsed
-            if "severity" in parsed:
-                event_data.severity = parsed["severity"]
-            if "event_type" in parsed:
-                event_data.event_type = parsed["event_type"]
+    legacy_timestamp = ensure_utc(event_data.timestamp) if event_data.timestamp else get_utc_now()
+    legacy_fingerprint = telemetry_ingestion_service._fingerprint(event_data, legacy_timestamp)
+    event = db.query(SecurityEventModel).filter(
+        SecurityEventModel.tenant_id == tenant_id,
+        SecurityEventModel.content_fingerprint == legacy_fingerprint,
+    ).first()
+    event = event or security_event_service._find_existing_event(
+        db, tenant_id, event_data.source, event_data.event_type, legacy_timestamp, event_data.raw_event,
+    )
+    created_new_event = event is None
+    if event is None:
+        batch_request = IngestionBatchRequest(batch_id=f"legacy-{uuid.uuid4()}", events=[event_data])
+        _batch, receipt_items = telemetry_ingestion_service.ingest_batch(
+            db, tenant_id=tenant_id,
+            actor_key=f"collector:{auth_context.collector.id}" if auth_context.collector else f"user:{auth_context.user.id}",
+            request=batch_request, collector=auth_context.collector, dispatch=False,
+        )
+        item = receipt_items[0]
+        if item["status"] == "rejected":
+            raise HTTPException(status_code=422, detail={"error_code": item["error_code"], "message": item["message"]})
+        event_id = item.get("event_id") or item.get("duplicate_of")
+        event = security_event_service.get_event_by_id(db, tenant_id, event_id)
     
-    event = security_event_service.create_event(db, tenant_id, event_data)
-    
+    entity_investigation_service.extract_event(db, event)
     analysis_result = detection_engine.analyze_and_process_event(db, tenant_id, event)
     db.refresh(event, attribute_names=["detection_matches"])
     COLLECTOR_EVENTS.labels(ingestion_source).inc()
@@ -97,6 +124,14 @@ def ingest_event(
             resource_id=event.id,
             details={**audit_details, "collector_id": auth_context.collector.id}
         )
+
+    if created_new_event:
+        background_tasks.add_task(
+            broadcast_notification,
+            tenant_id,
+            NotificationType.NEW_EVENT,
+            {"id": event.id, "accepted": 1, "source": ingestion_source},
+        )
     
     return IngestionResponse(
         id=event.id,
@@ -117,9 +152,106 @@ def ingest_event(
     )
 
 
+@router.post("/ingest/batch", response_model=IngestionBatchReceipt, status_code=status.HTTP_202_ACCEPTED)
+def ingest_event_batch(
+    payload: IngestionBatchRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    auth_context: AuthContext = Depends(get_current_auth_context),
+):
+    if auth_context.user and Permission.TELEMETRY_INGEST.value not in membership_permissions(db, auth_context.user):
+        raise HTTPException(status_code=403, detail={"error_code": "PERMISSION_DENIED", "message": "Telemetry ingestion permission is required"})
+    actor_key = f"collector:{auth_context.collector.id}" if auth_context.collector else f"user:{auth_context.user.id}"
+    if auth_context.collector:
+        timestamp_header = request.headers.get("x-ingestion-timestamp")
+        nonce = request.headers.get("x-ingestion-nonce")
+        signature = request.headers.get("x-ingestion-signature")
+        if any((timestamp_header, nonce, signature)):
+            if not all((timestamp_header, nonce, signature)):
+                raise HTTPException(status_code=401, detail={"error_code": "INCOMPLETE_SIGNATURE", "message": "All ingestion signature headers are required"})
+            try:
+                submitted_at = datetime.fromtimestamp(int(timestamp_header), tz=timezone.utc)
+            except (TypeError, ValueError, OSError) as exc:
+                raise HTTPException(status_code=401, detail={"error_code": "INVALID_SIGNATURE_TIME", "message": "Signature timestamp is invalid"}) from exc
+            if abs((get_utc_now() - submitted_at).total_seconds()) > get_settings().INGESTION_REPLAY_WINDOW_SECONDS:
+                raise HTTPException(status_code=401, detail={"error_code": "SIGNATURE_EXPIRED", "message": "Signed request is outside the replay window"})
+            if len(nonce) > 100:
+                raise HTTPException(status_code=401, detail={"error_code": "INVALID_NONCE", "message": "Nonce is invalid"})
+            if db.query(IngestionReplayNonce).filter(
+                IngestionReplayNonce.collector_id == auth_context.collector.id,
+                IngestionReplayNonce.nonce == nonce,
+            ).first():
+                raise HTTPException(status_code=409, detail={"error_code": "REPLAY_DETECTED", "message": "Signed request nonce has already been used"})
+            token = request.headers.get("authorization", "").split(" ", 1)[-1]
+            # Exclude defaults the client did not send, then use Pydantic's
+            # normalized JSON representation as the signing contract.
+            canonical_body = json.dumps(
+                payload.model_dump(mode="json", exclude_unset=True),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            body_hash = hashlib.sha256(canonical_body.encode()).hexdigest()
+            material = f"{timestamp_header}.{nonce}.{payload.batch_id}.{body_hash}".encode()
+            expected = hmac.new(token.encode(), material, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                raise HTTPException(status_code=401, detail={"error_code": "INVALID_SIGNATURE", "message": "Signed request verification failed"})
+            db.add(IngestionReplayNonce(
+                tenant_id=auth_context.tenant_id, collector_id=auth_context.collector.id,
+                nonce=nonce, request_fingerprint=body_hash,
+                expires_at=get_utc_now() + timedelta(seconds=get_settings().INGESTION_REPLAY_WINDOW_SECONDS),
+            ))
+            db.flush()
+    try:
+        batch, items = telemetry_ingestion_service.ingest_batch(
+            db,
+            tenant_id=auth_context.tenant_id,
+            actor_key=actor_key,
+            request=payload,
+            collector=auth_context.collector,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        status_code = 409 if code == "BATCH_ID_CONFLICT" else 413 if "LARGE" in code or "LIMIT" in code else 422
+        raise HTTPException(status_code=status_code, detail={"error_code": code, "message": "Batch was not accepted"}) from exc
+    replayed = bool(getattr(batch, "_replayed", False))
+    if auth_context.user:
+        audit_service.record(
+            db, action="telemetry_batch_ingested", user=auth_context.user,
+            tenant_id=auth_context.tenant_id, resource_type="ingestion_batch", resource_id=batch.id,
+            details={"batch_id": payload.batch_id, "submitted": batch.submitted_count, "accepted": batch.accepted_count,
+                     "duplicates": batch.duplicate_count, "rejected": batch.rejected_count},
+        )
+    if not replayed and batch.accepted_count > 0:
+        accepted_event_ids = [
+            item.get("event_id")
+            for item in items
+            if item.get("status") == "accepted" and item.get("event_id")
+        ]
+        background_tasks.add_task(
+            broadcast_notification,
+            auth_context.tenant_id,
+            NotificationType.NEW_EVENT,
+            {
+                "id": accepted_event_ids[-1] if accepted_event_ids else batch.id,
+                "batch_id": batch.batch_key,
+                "accepted": batch.accepted_count,
+                "submitted": batch.submitted_count,
+                "duplicates": batch.duplicate_count,
+                "collector_id": auth_context.collector.id if auth_context.collector else None,
+            },
+        )
+    return IngestionBatchReceipt(
+        receipt_id=batch.id, batch_id=batch.batch_key, replayed=replayed,
+        submitted=batch.submitted_count, accepted=batch.accepted_count,
+        duplicates=batch.duplicate_count, rejected=batch.rejected_count,
+        items=items, received_at=batch.received_at,
+    )
+
+
 @router.get("/simulate/scenarios", response_model=Dict[str, Any])
 def list_simulation_scenarios(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     """List available SOC attack simulation scenarios for demo."""
     return {
@@ -145,7 +277,7 @@ def list_simulation_scenarios(
 def simulate_attack(
     scenario_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
+    current_user: User = Depends(require_permission(Permission.ALERTS_CREATE)),
 ):
     """Run a pre-built SOC attack simulation scenario."""
     scenario = SOC_SIMULATION_SCENARIOS.get(scenario_id)
@@ -219,7 +351,7 @@ def list_events(
     sort_by: str = Query("timestamp", pattern="^(timestamp|created_at|severity|event_type)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW)),
 ):
     events = security_event_service.list_events(
         db,
@@ -243,7 +375,7 @@ def get_events_today_stats(
         description="Browser timezone offset in minutes, matching JavaScript Date.getTimezoneOffset().",
     ),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW)),
 ):
     now = get_utc_now()
     local_now = now - timedelta(minutes=timezone_offset_minutes)
@@ -262,7 +394,7 @@ def get_events_today_stats(
 def get_event(
     event_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW)),
 ):
     validate_uuid(event_id, "event_id")
     try:
@@ -276,7 +408,7 @@ def get_event(
 def analyze_event(
     event_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_all_permissions(Permission.ALERTS_UPDATE, Permission.TRIAGE_AI_USE)),
 ):
     validate_uuid(event_id, "event_id")
     try:

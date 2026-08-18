@@ -9,10 +9,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Table,
   TableBody,
   TableCell,
@@ -25,9 +21,7 @@ import {
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import { PageHeader, LoadingState, ErrorState } from '../components/ui';
 import { getTenantUsers, updateUser, deleteUser, User } from '../services/api';
-import { useAuthStore } from '../store';
-import { hasRole } from '../utils/permissions';
-import { useNavigate } from 'react-router-dom';
+import { useAuthStore, usePermissionStore } from '../store';
 
 const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -36,7 +30,7 @@ const UsersPage: React.FC = () => {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
   const { user: currentUser } = useAuthStore();
-  const navigate = useNavigate();
+  const can = usePermissionStore((state) => state.can);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -56,20 +50,14 @@ const UsersPage: React.FC = () => {
       return; // Still loading
     }
 
-    if (!hasRole(currentUser.role, 'admin')) {
-      navigate('/dashboard');
-      return;
-    }
-
     fetchUsers();
-  }, [currentUser, navigate, fetchUsers]);
+  }, [currentUser, fetchUsers]);
 
   const handleSaveUser = async () => {
     if (!editUser) return;
     try {
       await updateUser(editUser.id, {
         full_name: editUser.full_name,
-        role: editUser.role,
         is_active: editUser.is_active,
       });
       setEditUser(null);
@@ -172,7 +160,7 @@ const UsersPage: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <Button
+                      {can('users.update') && <Button
                         variant="outlined"
                         size="small"
                         startIcon={<EditIcon />}
@@ -180,8 +168,8 @@ const UsersPage: React.FC = () => {
                         sx={{ mr: 1 }}
                       >
                         Edit
-                      </Button>
-                      <Button
+                      </Button>}
+                      {can('users.disable') && <Button
                         variant="outlined"
                         size="small"
                         color="error"
@@ -190,7 +178,7 @@ const UsersPage: React.FC = () => {
                         disabled={isCurrentUser(u)}
                       >
                         Deactivate
-                      </Button>
+                      </Button>}
                     </TableCell>
                   </TableRow>
                 ))
@@ -212,34 +200,9 @@ const UsersPage: React.FC = () => {
                 onChange={(e) => setEditUser({ ...editUser, full_name: e.target.value })}
                 fullWidth
               />
-              <FormControl fullWidth>
-                <InputLabel>Role</InputLabel>
-                <Select
-                  value={editUser.role || ''}
-                  label="Role"
-                  onChange={(e) => setEditUser({ ...editUser, role: e.target.value })}
-                  disabled={isCurrentUser(editUser)}
-                >
-                  <MenuItem value="admin">Admin</MenuItem>
-                  <MenuItem value="analyst">Analyst</MenuItem>
-                  <MenuItem value="responder">Responder</MenuItem>
-                  <MenuItem value="viewer">Viewer</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={editUser.is_active ? 'active' : 'inactive'}
-                  label="Status"
-                  onChange={(e) =>
-                    setEditUser({ ...editUser, is_active: e.target.value === 'active' })
-                  }
-                  disabled={isCurrentUser(editUser)}
-                >
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="inactive">Inactive</MenuItem>
-                </Select>
-              </FormControl>
+              <Alert severity="info">
+                Assign organization roles and membership status from the Members page.
+              </Alert>
               {isCurrentUser(editUser) && (
                 <Alert severity="info">
                   You cannot modify your own administrator account

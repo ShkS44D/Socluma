@@ -23,11 +23,11 @@ Open `http://localhost:3000`. Sign in with the pilot credentials supplied privat
 
 ## Recommended investigation order
 
-Filter incidents to **All statuses**, then investigate: Simple detection -> Multi-alert correlated -> High-risk -> Incomplete evidence -> Prompt-injection resilience -> Manual -> Legacy-style. Review the origin explanation, primary alert, linked events/rules, risk breakdown, evidence, entities, and timeline before using Copilot.
+Filter incidents to **All statuses**, then investigate: Simple detection -> Multi-alert correlated -> High-risk -> Incomplete evidence -> Prompt-injection resilience -> Manual -> Legacy-style. Review the origin explanation, primary alert, linked events/rules, risk breakdown, evidence, entities, and timeline before using Triage AI.
 
-## Copilot and fallback
+## Triage AI and fallback
 
-Open Incident Copilot and ask "Why was this incident created?" followed by "Which facts are confirmed and what evidence is missing?" Verify every evidence link opens an object belonging to the incident. A normal answer shows `provider: openai`; fallback mode shows `fallback_used: true` and provider/model metadata for `triageops-deterministic-v1`. Fallback is expected to remain grounded and useful.
+Open Triage AI and ask "Why was this incident created?" followed by "Which facts are confirmed and what evidence is missing?" Verify every evidence link opens an object belonging to the incident. A normal answer shows `provider: openai`; fallback mode shows `fallback_used: true` and provider/model metadata for `triageops-deterministic-v1`. Fallback is expected to remain grounded and useful.
 
 ## Report a bug
 

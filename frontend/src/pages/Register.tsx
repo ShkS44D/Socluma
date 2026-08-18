@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import { register, login } from '../services/api'
 import { useAuthStore } from '../store'
+import CyberBackground from '../components/auth/CyberBackground'
 
 const Register: React.FC = () => {
     const [email, setEmail] = useState('')
@@ -39,8 +40,12 @@ const Register: React.FC = () => {
             }
             await register(requestData)
             const loginResponse = await login({ email, password })
-            authLogin(loginResponse.access_token, loginResponse.refresh_token)
-            navigate('/dashboard')
+            if (loginResponse.access_token) {
+                authLogin(loginResponse.access_token, loginResponse.refresh_token)
+                navigate('/dashboard')
+            } else {
+                navigate('/login')
+            }
         } catch (err: any) {
             const errorMessage =
                 err.response?.data?.detail ||
@@ -54,7 +59,7 @@ const Register: React.FC = () => {
     }
 
     return (
-        <Container component="main" maxWidth="xs">
+        <CyberBackground><Container component="main" maxWidth="xs">
             <CssBaseline />
             <Box
                 sx={{
@@ -146,7 +151,7 @@ const Register: React.FC = () => {
                     </Box>
                 </Box>
             </Box>
-        </Container>
+        </Container></CyberBackground>
     )
 }
 

@@ -6,6 +6,7 @@ import yaml
 from src.models.sqlalchemy import DetectionRule, RuleType
 from src.models.pydantic import DetectionRuleCreate, DetectionRuleUpdate
 from src.services.sigma_rule_service import sigma_rule_service
+from src.services.detection_lifecycle_service import detection_lifecycle_service
 
 
 class DetectionRuleService:
@@ -101,9 +102,36 @@ class DetectionRuleService:
             enabled=rule_data.enabled,
             condition=condition,
             mitre_technique_id=rule_data.mitre_technique_id,
+            sigma_rule_id=(
+                str(rule_content.get("id"))
+                if rule_type == RuleType.SIGMA and isinstance(rule_content, dict) and rule_content.get("id")
+                else None
+            ),
             created_by=user_id,
         )
         db.add(rule)
+        db.flush()
+        definition = rule_content or {
+            "kind": "event_match",
+            "conditions": [
+                {"field": key, "operator": "eq", "value": value}
+                for key, value in (condition or {}).items()
+            ],
+            "mitre_mappings": [rule_data.mitre_technique_id] if rule_data.mitre_technique_id else [],
+        }
+        version = detection_lifecycle_service.create_version(
+            db, rule, user_id, definition, original_content=sigma_rule or None,
+            summary="Initial rule version",
+        )
+        # Compatibility for the established create API. New lifecycle APIs
+        # create disabled drafts and require explicit review/publication.
+        if rule_data.enabled:
+            version.lifecycle_status = "production"
+            version.test_result = {"status": "passed", "source": "legacy_compatibility"}
+            version.published_at = __import__("src.utils.datetime_utils", fromlist=["get_utc_now"]).get_utc_now()
+            rule.production_version_id = version.id
+            rule.lifecycle_status = "production"
+            rule.enabled = True
         db.commit()
         db.refresh(rule)
         return rule
@@ -114,6 +142,7 @@ class DetectionRuleService:
         tenant_id: str,
         rule_id: str,
         update_data: DetectionRuleUpdate,
+        user_id: str,
     ) -> DetectionRule:
         rule = self.get_rule_by_id(db, tenant_id, rule_id)
         
@@ -164,10 +193,40 @@ class DetectionRuleService:
                         query_parts = [f"{k}={v}" for k, v in selection.items()]
                         rule.query = " ".join(query_parts)
         
-        # Update other fields (excluding those we handled above)
+        content_changed = any(
+            key in update_dict
+            for key in ("rule_content", "sigma_rule", "condition", "query", "rule_type", "type")
+        )
+        requested_enabled = update_dict.pop("enabled", None)
+        # Update other identity/display fields. Production evaluation reads only
+        # the explicit immutable production version.
         for key, value in update_dict.items():
             if key not in ('rule_type', 'type', 'rule_content'):
                 setattr(rule, key, value)
+        if content_changed:
+            definition = rule.rule_content or {
+                "kind": rule.detection_kind or "event_match",
+                "conditions": [
+                    {"field": key, "operator": "eq", "value": value}
+                    for key, value in (rule.condition or {}).items()
+                ],
+            }
+            detection_lifecycle_service.create_version(
+                db,
+                rule,
+                user_id,
+                definition,
+                original_content=rule.sigma_rule,
+                summary="Edited through detection rule API",
+            )
+        elif requested_enabled is False:
+            rule.enabled = False
+            rule.lifecycle_status = "disabled"
+        elif requested_enabled is True:
+            if not rule.production_version_id or rule.lifecycle_status == "retired":
+                raise ValueError("Only a disabled published rule can be re-enabled")
+            rule.enabled = True
+            rule.lifecycle_status = "production"
             
         db.add(rule)
         db.commit()
@@ -181,7 +240,10 @@ class DetectionRuleService:
         rule_id: str,
     ) -> DetectionRule:
         rule = self.get_rule_by_id(db, tenant_id, rule_id)
+        if not rule.enabled and (not rule.production_version_id or rule.lifecycle_status == "retired"):
+            raise ValueError("Only a disabled published rule can be re-enabled")
         rule.enabled = not rule.enabled
+        rule.lifecycle_status = "production" if rule.enabled else "disabled"
         db.add(rule)
         db.commit()
         db.refresh(rule)

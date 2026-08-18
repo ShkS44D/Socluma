@@ -14,26 +14,52 @@ import {
   InputLabel,
   FormControl,
   Paper,
+  Alert,
+  Chip,
 } from '@mui/material'
-import { Add, Security } from '@mui/icons-material'
+import { Add, ContentCopy, Security, VpnKey } from '@mui/icons-material'
 import { PageHeader, SectionCard, StatusChip } from '../components/ui'
-import { getLogSources, createLogSource, getCollectors, registerCollector, LogSource, Collector } from '../services/api'
+import {
+  getLogSources, createLogSource, getCollectors, registerCollector, LogSource, Collector,
+  createEnrollmentToken, getDataSources, getDeadLetters, getIngestionMetrics,
+  DataSource, DeadLetterItem, IngestionMetrics, getCollectorGroups, getCollectorPolicies,
+  importTelemetry, CollectorRegistrationResponse,
+} from '../services/api'
 import { formatDateTimePKT } from '../utils/time'
 
 const LogSources: React.FC = () => {
   const [logSources, setLogSources] = useState<LogSource[]>([])
   const [collectors, setCollectors] = useState<Collector[]>([])
+  const [dataSources, setDataSources] = useState<DataSource[]>([])
+  const [deadLetters, setDeadLetters] = useState<DeadLetterItem[]>([])
+  const [metrics, setMetrics] = useState<IngestionMetrics | null>(null)
+  const [enrollmentToken, setEnrollmentToken] = useState<string | null>(null)
+  const [collectorGroups, setCollectorGroups] = useState<Array<{ id: string; name: string; description?: string }>>([])
+  const [collectorPolicies, setCollectorPolicies] = useState<Array<{ id: string; name: string; active_version?: number }>>([])
+  const [importMessage, setImportMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [openLogSourceDialog, setOpenLogSourceDialog] = useState(false)
   const [openCollectorDialog, setOpenCollectorDialog] = useState(false)
+  const [collectorCredentials, setCollectorCredentials] = useState<CollectorRegistrationResponse | null>(null)
+  const [registrationError, setRegistrationError] = useState<string | null>(null)
+  const [credentialsCopied, setCredentialsCopied] = useState(false)
   const [newLogSource, setNewLogSource] = useState({ name: '', type: 'custom' as const, description: '' })
   const [newCollector, setNewCollector] = useState({ name: '', type: '', hostname: '', log_source_id: '' })
 
   const fetchData = async () => {
     try {
-      const [sources, colls] = await Promise.all([getLogSources(), getCollectors()])
+      const [sources, colls, managedSources, failures, ingestion, groups, policies] = await Promise.all([
+        getLogSources(), getCollectors(), getDataSources().catch(() => []),
+        getDeadLetters().catch(() => []), getIngestionMetrics().catch(() => null),
+        getCollectorGroups().catch(() => []), getCollectorPolicies().catch(() => []),
+      ])
       setLogSources(sources)
       setCollectors(colls)
+      setDataSources(managedSources)
+      setDeadLetters(failures)
+      setMetrics(ingestion)
+      setCollectorGroups(groups)
+      setCollectorPolicies(policies)
     } catch (err) {
       console.error('Failed to fetch data:', err)
     } finally {
@@ -57,14 +83,66 @@ const LogSources: React.FC = () => {
   }
 
   const handleRegisterCollector = async () => {
+    if (!newCollector.name.trim() || !newCollector.type.trim()) {
+      setRegistrationError('Collector name and type are required.')
+      return
+    }
     try {
       const coll = await registerCollector(newCollector)
-      alert(`Collector registered! Token: ${coll.token}`)
+      setCollectorCredentials(coll)
+      setCredentialsCopied(false)
+      setRegistrationError(null)
       await fetchData()
       setOpenCollectorDialog(false)
       setNewCollector({ name: '', type: '', hostname: '', log_source_id: '' })
-    } catch (err) {
+    } catch (err: any) {
+      setRegistrationError(
+        err?.response?.data?.detail?.message ||
+        err?.response?.data?.detail ||
+        'Failed to register collector.'
+      )
       console.error('Failed to register collector:', err)
+    }
+  }
+
+  const collectorConfiguration = collectorCredentials
+    ? [
+        `COLLECTOR_ID=${collectorCredentials.id}`,
+        `COLLECTOR_TOKEN=${collectorCredentials.token}`,
+        'BACKEND_URL=http://127.0.0.1:8001',
+        `SPOOL_PATH=./data/event-spool-${collectorCredentials.id}.db`,
+        `CHECKPOINT_PATH=./data/checkpoints-${collectorCredentials.id}.json`,
+      ].join('\n')
+    : ''
+
+  const copyCollectorConfiguration = async () => {
+    if (!collectorConfiguration) return
+    await navigator.clipboard.writeText(collectorConfiguration)
+    setCredentialsCopied(true)
+  }
+
+  const handleCreateEnrollmentToken = async () => {
+    try {
+      const result = await createEnrollmentToken({ name: 'Collector enrollment', expires_minutes: 30 })
+      setEnrollmentToken(result.token)
+    } catch (err) {
+      console.error('Failed to create enrollment token:', err)
+    }
+  }
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const extension = file.name.toLowerCase().split('.').pop()
+    const formatName = extension === 'csv' ? 'csv' : extension === 'jsonl' ? 'jsonl' : 'json'
+    try {
+      const result = await importTelemetry(file, formatName)
+      setImportMessage(`Import ${result.state}: ${result.accepted} accepted, ${result.duplicates} duplicates, ${result.rejected} rejected.`)
+      await fetchData()
+    } catch {
+      setImportMessage('Import failed. Check the file format and your telemetry import permission.')
+    } finally {
+      event.target.value = ''
     }
   }
 
@@ -105,7 +183,42 @@ const LogSources: React.FC = () => {
         >
           Register Collector
         </Button>
+        <Button variant="outlined" startIcon={<VpnKey />} onClick={handleCreateEnrollmentToken}>
+          Create Enrollment Token
+        </Button>
+        <Button variant="outlined" component="label">
+          Import JSON / JSONL / CSV
+          <input hidden type="file" accept=".json,.jsonl,.csv" onChange={handleImport} />
+        </Button>
       </Box>
+      {enrollmentToken && (
+        <Alert severity="warning" onClose={() => setEnrollmentToken(null)}>
+          Copy this one-time enrollment token now: <strong>{enrollmentToken}</strong>
+        </Alert>
+      )}
+      {importMessage && <Alert severity="info" onClose={() => setImportMessage(null)}>{importMessage}</Alert>}
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={4}><Paper sx={{ p: 2 }}><Typography color="text.secondary">Events received</Typography><Typography variant="h4">{metrics?.events ?? 0}</Typography></Paper></Grid>
+        <Grid item xs={12} md={4}><Paper sx={{ p: 2 }}><Typography color="text.secondary">Average data quality</Typography><Typography variant="h4">{Math.round(metrics?.average_quality ?? 0)}%</Typography></Paper></Grid>
+        <Grid item xs={12} md={4}><Paper sx={{ p: 2 }}><Typography color="text.secondary">Dead-letter items</Typography><Typography variant="h4">{deadLetters.length}</Typography></Paper></Grid>
+      </Grid>
+      <SectionCard title="Managed Data Sources">
+        <Grid container spacing={2}>
+          {dataSources.length === 0 && <Grid item xs={12}><Typography color="text.secondary">No managed data sources configured yet.</Typography></Grid>}
+          {dataSources.map(source => (
+            <Grid item xs={12} md={6} lg={4} key={source.id}>
+              <Paper sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="h6">{source.name}</Typography>
+                  <Chip size="small" label={source.health_status} color={source.health_status === 'healthy' ? 'success' : 'default'} />
+                </Box>
+                <Typography variant="body2" color="text.secondary">{source.source_type} · {source.parser_name} · {source.transport}</Typography>
+                <Typography variant="caption">{source.accepted_count} accepted · {source.duplicate_count} duplicates · {source.rejected_count} rejected</Typography>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </SectionCard>
       <SectionCard title="Log Sources">
         <Grid container spacing={2}>
           {logSources.map(source => (
@@ -155,10 +268,41 @@ const LogSources: React.FC = () => {
                     Last seen: {formatDateTimePKT(coll.last_seen)}
                   </Typography>
                 )}
+                <Typography variant="caption" display="block" color="text.secondary">
+                  Health: {coll.health_status || coll.status} · Version: {coll.collector_version || 'unknown'}
+                </Typography>
+                <Typography variant="caption" display="block" color="text.secondary">
+                  Queue: {coll.queue_depth || 0} · Accepted: {coll.events_accepted || 0} · Rejected: {coll.events_rejected || 0}
+                </Typography>
               </Paper>
             </Grid>
           ))}
         </Grid>
+      </SectionCard>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <SectionCard title="Collector Groups">
+            {collectorGroups.length === 0 ? <Typography color="text.secondary">No groups configured.</Typography> :
+              collectorGroups.map(group => <Paper key={group.id} sx={{ p: 1.5, mb: 1 }}><Typography fontWeight={600}>{group.name}</Typography><Typography variant="caption">{group.description || 'No description'}</Typography></Paper>)}
+          </SectionCard>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <SectionCard title="Collector Policies">
+            {collectorPolicies.length === 0 ? <Typography color="text.secondary">No policies configured.</Typography> :
+              collectorPolicies.map(policy => <Paper key={policy.id} sx={{ p: 1.5, mb: 1 }}><Typography fontWeight={600}>{policy.name}</Typography><Typography variant="caption">Active version: {policy.active_version || 'draft'}</Typography></Paper>)}
+          </SectionCard>
+        </Grid>
+      </Grid>
+      <SectionCard title="Dead-letter Queue">
+        {deadLetters.length === 0 ? (
+          <Typography color="text.secondary">No ingestion failures require attention.</Typography>
+        ) : deadLetters.map(item => (
+          <Paper key={item.id} sx={{ p: 2, mb: 1 }}>
+            <Typography fontWeight={600}>{item.error_code}</Typography>
+            <Typography variant="body2">{item.safe_error}</Typography>
+            <Typography variant="caption">{item.stage} · {item.attempts} attempts · {formatDateTimePKT(item.created_at)}</Typography>
+          </Paper>
+        ))}
       </SectionCard>
       <Dialog open={openLogSourceDialog} onClose={() => setOpenLogSourceDialog(false)}>
         <DialogTitle>Add Log Source</DialogTitle>
@@ -203,19 +347,32 @@ const LogSources: React.FC = () => {
       <Dialog open={openCollectorDialog} onClose={() => setOpenCollectorDialog(false)}>
         <DialogTitle>Register Collector</DialogTitle>
         <DialogContent sx={{ width: 400 }}>
+          {registrationError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {registrationError}
+            </Alert>
+          )}
           <TextField
             label="Name"
+            required
             fullWidth
             margin="normal"
             value={newCollector.name}
-            onChange={e => setNewCollector({ ...newCollector, name: e.target.value })}
+            onChange={e => {
+              setNewCollector({ ...newCollector, name: e.target.value })
+              setRegistrationError(null)
+            }}
           />
           <TextField
             label="Type"
+            required
             fullWidth
             margin="normal"
             value={newCollector.type}
-            onChange={e => setNewCollector({ ...newCollector, type: e.target.value })}
+            onChange={e => {
+              setNewCollector({ ...newCollector, type: e.target.value })
+              setRegistrationError(null)
+            }}
           />
           <TextField
             label="Hostname"
@@ -239,8 +396,50 @@ const LogSources: React.FC = () => {
           </FormControl>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCollectorDialog(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setOpenCollectorDialog(false)
+            setRegistrationError(null)
+          }}>Cancel</Button>
           <Button variant="contained" onClick={handleRegisterCollector}>Register</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={Boolean(collectorCredentials)}
+        onClose={() => setCollectorCredentials(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Collector registered</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            These credentials are shown only once. Save them securely before closing this window.
+            They belong only to the currently selected organization.
+          </Alert>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Replace the matching values in <strong>collector-agent\.env</strong>, then restart the
+            collector.
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            minRows={4}
+            value={collectorConfiguration}
+            InputProps={{
+              readOnly: true,
+              sx: { fontFamily: 'monospace' },
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            startIcon={<ContentCopy />}
+            onClick={copyCollectorConfiguration}
+          >
+            {credentialsCopied ? 'Copied' : 'Copy configuration'}
+          </Button>
+          <Button variant="contained" onClick={() => setCollectorCredentials(null)}>
+            I saved it
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

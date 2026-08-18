@@ -1,0 +1,22 @@
+[
+  {
+    "id": "example-1",
+    "source": "fixture",
+    "severity": "medium",
+    "normalized_event": {
+      "process": {
+        "name": "powershell.exe"
+      }
+    }
+  },
+  {
+    "id": "example-2",
+    "source": "fixture",
+    "severity": "low",
+    "normalized_event": {
+      "process": {
+        "name": "notepad.exe"
+      }
+    }
+  }
+]

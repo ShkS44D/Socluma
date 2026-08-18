@@ -19,4 +19,18 @@ celery_app.conf.update(
     task_always_eager=settings.SOAR_TASK_ALWAYS_EAGER or settings.USE_REDIS_MOCK,
     task_time_limit=settings.CELERY_TASK_TIME_LIMIT_SECONDS,
     task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS,
+    beat_schedule={
+        "phase6-due-scheduled-searches": {
+            "task": "run_due_scheduled_searches",
+            "schedule": 60.0,
+        },
+        "phase76-due-threat-syncs": {
+            "task": "run_due_threat_syncs",
+            "schedule": 60.0,
+        },
+        "phase76-commercial-retention": {
+            "task": "cleanup_ioc_commercial_jobs",
+            "schedule": 3600.0,
+        },
+    },
 )

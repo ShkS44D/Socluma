@@ -23,6 +23,8 @@ from src.models.sqlalchemy import (
     MitreTechnique,
     RuleType,
     Severity,
+    OrganizationMembership,
+    OrganizationRole,
 )
 from src.services.default_detection_rules import DEFAULT_DETECTION_RULES
 from src.services.mitre_technique_service import mitre_technique_service
@@ -65,6 +67,11 @@ class DetectionPipelineTests(unittest.TestCase):
             role=UserRole.ADMIN,
         )
         db.add(user)
+        db.flush()
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id, user_id=user.id,
+            role=OrganizationRole.ADMINISTRATOR, is_active=True,
+        ))
         db.commit()
         db.refresh(user)
         self.user_id = user.id

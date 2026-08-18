@@ -21,6 +21,15 @@ export interface AuthResponse {
   expires_in?: number
 }
 
+export interface LoginResponse {
+  access_token?: string
+  refresh_token?: string
+  token_type: string
+  expires_in?: number
+  mfa_required?: boolean
+  challenge_token?: string
+}
+
 export interface User {
   id: string
   email: string
@@ -30,11 +39,45 @@ export interface User {
   is_active: boolean
   created_at: string
   updated_at: string
+  mfa_enabled?: boolean
+  email_verified?: boolean
+}
+
+export interface AccountSecurityStatus {
+  mfa_enabled: boolean
+  recovery_codes_remaining: number
+  email_verified: boolean
+  email_verification_required: boolean
+}
+
+export interface AuthSession {
+  id: string
+  created_at: string
+  last_activity_at?: string
+  expires_at: string
+  ip_address?: string
+  user_agent?: string
+  device_label?: string
+  revoked_at?: string
+  revocation_reason?: string
+  current: boolean
+}
+
+export interface AuthSecurityEvent {
+  id: string
+  event_type: string
+  result: string
+  severity: 'informational' | 'suspicious' | 'critical'
+  reason_code?: string
+  ip_address?: string
+  device_label?: string
+  request_id?: string
+  created_at: string
 }
 
 export type UserRole = 'admin' | 'analyst' | 'responder' | 'viewer'
 export type OrganizationRole = 'owner' | 'administrator' | 'soc_manager' | 'analyst' | 'viewer'
-export type OrganizationStatus = 'active' | 'suspended' | 'disabled' | 'deleted'
+export type OrganizationStatus = 'active' | 'suspended' | 'disabled' | 'pending_deletion' | 'deleted'
 export type InvitationStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'revoked'
 
 export interface Organization {
@@ -54,11 +97,16 @@ export interface Organization {
   is_active: boolean
   created_at: string
   updated_at: string
+  deletion_requested_at?: string | null
+  scheduled_purge_at?: string | null
+  deleted_at?: string | null
+  deletion_requested_by_id?: string | null
 }
 
 export interface OrganizationCreate {
   name: string
   slug: string
+  deletion_pin: string
   description?: string
   industry?: string
   country?: string
@@ -103,10 +151,16 @@ export interface OrganizationUsage {
   collector_count: number
   event_count: number
   alert_count: number
+  incident_count: number
   playbook_count: number
+  playbook_execution_count: number
   soar_execution_count: number
+  triage_ai_request_count: number
   storage_bytes: number
   api_request_count: number
+  period_start: string
+  period_end: string
+  storage_measurement: 'estimated_application_payload_bytes'
   limits: Record<string, number>
 }
 
@@ -671,6 +725,19 @@ export interface DetectionRule {
   rule_type?: string
   event_type?: string | null
   enabled: boolean
+  lifecycle_status?: string
+  detection_kind?: string
+  current_version_id?: string | null
+  production_version_id?: string | null
+  owner_id?: string | null
+  team?: string | null
+  confidence?: number
+  risk_contribution?: number
+  tags?: string[]
+  mitre_mappings?: string[]
+  data_source_requirements?: string[]
+  last_triggered_at?: string | null
+  last_tested_at?: string | null
   mitre_technique_id?: string | null
   created_at: string
   updated_at: string
@@ -690,8 +757,29 @@ export interface DetectionRuleCreate {
 
 export interface DetectionRuleUpdate extends Partial<DetectionRuleCreate> {}
 
+export interface DetectionRuleVersion {
+  id: string
+  rule_id: string
+  version_number: number
+  lifecycle_status: string
+  rule_language: string
+  change_summary?: string | null
+  validation_result: { valid?: boolean; errors?: Array<{ code: string; message: string }> }
+  test_result: { status?: string }
+  content_hash: string
+  created_by_id?: string | null
+  reviewer_id?: string | null
+  approver_id?: string | null
+  published_at?: string | null
+  created_at: string
+}
+
 // IOC Types
-export type IndicatorType = 'ip' | 'domain' | 'url' | 'hash'
+export type IndicatorType =
+  | 'ip' | 'ipv4' | 'ipv6' | 'cidr' | 'domain' | 'url' | 'email'
+  | 'hash' | 'md5' | 'sha1' | 'sha256' | 'sha512'
+  | 'file_name' | 'file_path' | 'registry_key' | 'mutex' | 'user_agent'
+  | 'certificate_fingerprint' | 'ja3' | 'ja4' | 'cryptocurrency_address'
 
 export interface IOCEnrichment {
   id: string
@@ -700,7 +788,15 @@ export interface IOCEnrichment {
   reputation?: string | null
   malicious_count: number
   total_reports: number
-  raw_response?: Record<string, any> | null
+  provider_verdict?: string | null
+  confidence?: number | null
+  categories: string[]
+  detection_counts: Record<string, number>
+  provider_references: string[]
+  safe_result: Record<string, unknown>
+  failure_code?: string | null
+  retryable: boolean
+  expires_at?: string | null
   created_at: string
 }
 
@@ -713,6 +809,22 @@ export interface IOC {
   source?: string | null
   severity: Severity
   confidence_score: number
+  source_reliability: number
+  lifecycle_status: string
+  tlp: string
+  normalized_value?: string | null
+  display_value?: string | null
+  risk_score: number
+  risk_reasons: Array<{ factor: string; contribution: number; explanation: string }>
+  risk_score_version: string
+  internal_sighting_count: number
+  first_internal_sighting?: string | null
+  last_internal_sighting?: string | null
+  enrichment_status: string
+  last_enriched_at?: string | null
+  valid_until?: string | null
+  false_positive: boolean
+  allowlisted: boolean
   tags?: string[] | null
   is_active: boolean
   created_by?: string | null
@@ -735,6 +847,10 @@ export interface IOCCreate {
   source?: string
   severity?: Severity
   confidence_score?: number
+  source_reliability?: number
+  lifecycle_status?: string
+  tlp?: string
+  valid_until?: string
   tags?: string[]
   is_active?: boolean
 }
@@ -744,6 +860,10 @@ export interface IOCUpdate {
   source?: string
   severity?: Severity
   confidence_score?: number
+  source_reliability?: number
+  lifecycle_status?: string
+  lifecycle_reason?: string
+  tlp?: string
   tags?: string[]
   is_active?: boolean
 }
@@ -753,6 +873,12 @@ export interface IOCStats {
   malicious_iocs: number
   high_confidence: number
   recent_iocs: number
+  active_iocs: number
+  monitoring_iocs: number
+  expired_iocs: number
+  revoked_iocs: number
+  high_risk_iocs: number
+  iocs_with_sightings: number
 }
 
 export type LogSourceType = 'windows_edr' | 'linux_audit' | 'firewall' | 'cloudtrail' | 'application_log' | 'custom'
@@ -797,6 +923,13 @@ export interface Collector {
   last_seen?: string
   created_at: string
   updated_at: string
+  health_status?: string
+  collector_version?: string
+  platform?: string
+  queue_depth?: number
+  spool_size_bytes?: number
+  events_accepted?: number
+  events_rejected?: number
 }
 
 export interface CollectorCreate {
@@ -809,6 +942,47 @@ export interface CollectorCreate {
 export interface CollectorRegistrationResponse {
   id: string
   token: string
+}
+
+export interface DataSource {
+  id: string
+  tenant_id: string
+  source_key: string
+  name: string
+  source_type: string
+  parser_name: string
+  transport: string
+  enabled: boolean
+  health_status: string
+  accepted_count: number
+  rejected_count: number
+  duplicate_count: number
+  events_per_minute: number
+  ingestion_lag_seconds?: number
+  last_received_at?: string
+}
+
+export interface DeadLetterItem {
+  id: string
+  stage: string
+  error_code: string
+  safe_error: string
+  state: string
+  attempts: number
+  created_at: string
+}
+
+export interface IngestionMetrics {
+  events: number
+  average_quality: number
+  last_received_at?: string
+  failures: Record<string, number>
+}
+
+export interface EnrollmentTokenResponse {
+  id: string
+  token: string
+  expires_at: string
 }
 
 export type PlaybookStatus = 'draft' | 'testing' | 'active' | 'disabled' | 'archived'

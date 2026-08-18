@@ -11,8 +11,8 @@ Rate each item from 1 (poor/difficult/low trust) to 5 (excellent/easy/high trust
 | Risk-score explanation | | |
 | Evidence usefulness | | |
 | Timeline usefulness | | |
-| Copilot accuracy | | |
-| Copilot uncertainty handling | | |
+| Triage AI accuracy | | |
+| Triage AI uncertainty handling | | |
 | Navigation ease (1 = difficult, 5 = easy) | | |
 | Investigation time efficiency | | |
 | Overall trust | | |

@@ -169,6 +169,26 @@ const ThreatIntel: React.FC = () => {
       ),
     },
     {
+      key: 'risk',
+      header: 'Risk',
+      render: (ioc) => (
+        <StatusChip
+          label={`${ioc.risk_score}/100`}
+          color={ioc.risk_score >= 70 ? 'error' : ioc.risk_score >= 40 ? 'warning' : 'success'}
+        />
+      ),
+    },
+    {
+      key: 'lifecycle',
+      header: 'Lifecycle',
+      render: (ioc) => <StatusChip label={ioc.lifecycle_status.replace(/_/g, ' ')} />,
+    },
+    {
+      key: 'sightings',
+      header: 'Sightings',
+      render: (ioc) => <Typography variant="body2">{ioc.internal_sighting_count}</Typography>,
+    },
+    {
       key: 'source',
       header: 'Source',
       render: (ioc) => (
@@ -266,24 +286,24 @@ const ThreatIntel: React.FC = () => {
           </Grid>
           <Grid item xs={12} sm={6} xl={3}>
             <MetricCard
-              title="Malicious IOCs"
-              value={stats?.malicious_iocs || 0}
+              title="Active IOCs"
+              value={stats?.active_iocs || 0}
               severity="error"
               icon={<SecurityIcon fontSize="small" />}
             />
           </Grid>
           <Grid item xs={12} sm={6} xl={3}>
             <MetricCard
-              title="High Confidence"
-              value={stats?.high_confidence || 0}
+              title="High Risk"
+              value={stats?.high_risk_iocs || 0}
               severity="warning"
               icon={<SecurityIcon fontSize="small" />}
             />
           </Grid>
           <Grid item xs={12} sm={6} xl={3}>
             <MetricCard
-              title="Recent IOCs"
-              value={stats?.recent_iocs || 0}
+              title="Internally Sighted"
+              value={stats?.iocs_with_sightings || 0}
               severity="info"
               icon={<SecurityIcon fontSize="small" />}
             />
@@ -322,9 +342,14 @@ const ThreatIntel: React.FC = () => {
             >
               <MenuItem value="">All</MenuItem>
               <MenuItem value="ip">IP</MenuItem>
+              <MenuItem value="ipv4">IPv4</MenuItem>
+              <MenuItem value="ipv6">IPv6</MenuItem>
+              <MenuItem value="cidr">CIDR</MenuItem>
               <MenuItem value="domain">Domain</MenuItem>
               <MenuItem value="url">URL</MenuItem>
+              <MenuItem value="email">Email</MenuItem>
               <MenuItem value="hash">Hash</MenuItem>
+              <MenuItem value="sha256">SHA-256</MenuItem>
             </Select>
           </FormControl>
           <FormControl sx={{ minWidth: 150 }}>

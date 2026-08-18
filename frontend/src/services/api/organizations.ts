@@ -38,8 +38,17 @@ export const updateOrganization = async (
   return response.data
 }
 
-export const deleteOrganization = async (organizationId: string): Promise<Organization> => {
-  const response = await api.delete<Organization>(`/api/v1/organizations/${organizationId}`)
+export const setDeletionPin = async (organizationId: string, pin: string, currentPassword: string): Promise<void> => {
+  await api.put(`/api/v1/organizations/${organizationId}/deletion-pin`, { pin, current_password: currentPassword })
+}
+
+export const deleteOrganization = async (organizationId: string, pin: string): Promise<Organization> => {
+  const response = await api.delete<Organization>(`/api/v1/organizations/${organizationId}`, { data: { pin } })
+  return response.data
+}
+
+export const cancelOrganizationDeletion = async (organizationId: string): Promise<Organization> => {
+  const response = await api.post<Organization>(`/api/v1/organizations/${organizationId}/deletion/cancel`)
   return response.data
 }
 
@@ -56,7 +65,7 @@ export const listOrganizationMembers = async (organizationId: string): Promise<O
 export const updateOrganizationMember = async (
   organizationId: string,
   membershipId: string,
-  data: { role?: OrganizationRole; is_active?: boolean }
+  data: { role?: OrganizationRole; custom_role_id?: string; is_active?: boolean }
 ): Promise<OrganizationMembership> => {
   const response = await api.patch<OrganizationMembership>(
     `/api/v1/organizations/${organizationId}/members/${membershipId}`,

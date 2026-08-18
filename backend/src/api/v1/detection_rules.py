@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_db, get_current_user, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, require_permission
 from src.models.pydantic import (
     DetectionRule,
     DetectionRuleCreate,
@@ -10,7 +11,7 @@ from src.models.pydantic import (
     DetectionRuleTestResponse,
     DetectionRuleUpdate,
 )
-from src.models.sqlalchemy import RuleType, User, UserRole
+from src.models.sqlalchemy import RuleType, User
 from src.services.detection_engine import detection_engine
 from src.services.detection_rule_service import detection_rule_service
 from src.services.sigma_rule_service import sigma_rule_service
@@ -32,7 +33,7 @@ def create_rule(
     rule_data: DetectionRuleCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_CREATE)),
 ):
     try:
         rule = detection_rule_service.create_rule(
@@ -56,7 +57,7 @@ def create_rule(
 def list_rules(
     enabled_only: bool | None = Query(None, description="Filter by enabled status"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     rules = detection_rule_service.list_rules(db, current_user.tenant_id, enabled_only)
     return [DetectionRule.model_validate(rule) for rule in rules]
@@ -67,7 +68,7 @@ def import_sigma_rule(
     payload: DetectionRuleSigmaImport,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.SIGMA_CREATE)),
 ):
     validation = sigma_rule_service.validate(payload.content)
     if not validation.valid or validation.normalized is None:
@@ -102,7 +103,7 @@ def import_sigma_rule(
 def get_rule(
     rule_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     try:
         rule = detection_rule_service.get_rule_by_id(db, current_user.tenant_id, rule_id)
@@ -115,7 +116,7 @@ def get_rule(
 def export_rule(
     rule_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     try:
         rule = detection_rule_service.get_rule_by_id(db, current_user.tenant_id, rule_id)
@@ -134,7 +135,7 @@ def test_rule(
     rule_id: str,
     payload: DetectionRuleTestRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_VIEW)),
 ):
     try:
         rule = detection_rule_service.get_rule_by_id(db, current_user.tenant_id, rule_id)
@@ -178,11 +179,11 @@ def update_rule(
     update_data: DetectionRuleUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_UPDATE)),
 ):
     try:
         rule = detection_rule_service.update_rule(
-            db, current_user.tenant_id, rule_id, update_data
+            db, current_user.tenant_id, rule_id, update_data, current_user.id
         )
         audit_service.record(
             db,
@@ -223,7 +224,7 @@ def toggle_rule(
     rule_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_ENABLE)),
 ):
     try:
         rule = detection_rule_service.toggle_rule(
@@ -248,7 +249,7 @@ def delete_rule(
     rule_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    current_user: User = Depends(require_permission(Permission.DETECTIONS_DELETE)),
 ):
     try:
         detection_rule_service.delete_rule(db, current_user.tenant_id, rule_id)

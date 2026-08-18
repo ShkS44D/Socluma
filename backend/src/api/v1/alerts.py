@@ -4,7 +4,8 @@ from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from pydantic import BaseModel
-from src.api.deps import get_db, get_current_user, require_roles
+from src.api.deps import get_db
+from src.core.permissions import Permission, membership_permissions, require_permission
 from src.models.sqlalchemy import (
     User, 
     AlertSource, 
@@ -12,7 +13,6 @@ from src.models.sqlalchemy import (
     Severity, 
     AlertStatus, 
     AlertSourceType,
-    UserRole,
     Incident,
     IOC
 )
@@ -120,7 +120,7 @@ def create_alert(
     request: Request,
     alert_in: AlertCreate = Body(openapi_examples=ALERT_CREATE_EXAMPLES),
     db: Session = Depends(get_db), 
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))
+    current_user: User = Depends(require_permission(Permission.ALERTS_CREATE))
 ):
     """Create a new alert"""
     logger.info(f"Creating alert from source: {alert_in.source}")
@@ -197,7 +197,7 @@ def list_alerts(
     sort_by: str = Query("created_at", pattern="^(created_at|severity|status|processed_at)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW))
 ):
     """Get list of alerts with pagination and filtering"""
     query = db.query(Alert).filter(Alert.tenant_id == current_user.tenant_id)
@@ -262,7 +262,7 @@ def list_alerts(
 def get_alert(
     alert_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW))
 ):
     """Get a single alert by ID"""
     validate_uuid(alert_id, "alert_id")
@@ -307,9 +307,16 @@ def update_alert_status(
     status_update: AlertStatusUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST, UserRole.RESPONDER))
+    current_user: User = Depends(require_permission(Permission.ALERTS_UPDATE))
 ):
     """Update alert status"""
+    if status_update.status in {AlertStatus.RESOLVED, AlertStatus.DISMISSED} and (
+        Permission.ALERTS_CLOSE.value not in membership_permissions(db, current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "PERMISSION_DENIED", "message": "Closing alerts requires alerts.close"},
+        )
     validate_uuid(alert_id, "alert_id")
     alert = db.query(Alert).filter(
         Alert.id == alert_id,
@@ -348,7 +355,7 @@ def create_incident_from_alert(
     alert_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST))
+    current_user: User = Depends(require_permission(Permission.INCIDENTS_CREATE))
 ):
     """Submit an alert to deterministic correlation; lone alerts remain pending."""
     validate_uuid(alert_id, "alert_id")
@@ -400,7 +407,7 @@ def create_incident_from_alert(
 def get_alert_incident(
     alert_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW))
 ):
     """Get incident associated with alert"""
     validate_uuid(alert_id, "alert_id")
@@ -430,7 +437,7 @@ def get_alert_incident(
 def get_alert_iocs(
     alert_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_permission(Permission.ALERTS_VIEW))
 ):
     """Get IOCs associated with alert"""
     validate_uuid(alert_id, "alert_id")

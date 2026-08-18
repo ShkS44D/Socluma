@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -39,11 +41,11 @@ class ThreatIntelService:
         if indicator_type == IndicatorType.HASH and indicator in self.known_bad_hashes:
             return True
 
-        if indicator_type == IndicatorType.IP:
+        if indicator_type in {IndicatorType.IP, IndicatorType.IPV4, IndicatorType.IPV6}:
             return bool(self.IPV4_PATTERN.match(indicator) or self.IPV6_PATTERN.match(indicator))
         elif indicator_type == IndicatorType.DOMAIN:
             return bool(self.DOMAIN_PATTERN.match(indicator)) and len(indicator) <= 255
-        elif indicator_type == IndicatorType.HASH:
+        elif indicator_type in {IndicatorType.HASH, IndicatorType.MD5, IndicatorType.SHA1, IndicatorType.SHA256, IndicatorType.SHA512}:
             return bool(
                 self.HASH_MD5_PATTERN.match(indicator) or
                 self.HASH_SHA1_PATTERN.match(indicator) or
@@ -96,7 +98,7 @@ class ThreatIntelService:
 
         # Validate IOC value before any external lookups
         if not self._validate_indicator(ioc.value, ioc.type):
-            logger.debug(f"Invalid IOC format: {ioc.value} ({ioc.type})")
+            logger.debug("Invalid IOC format rejected before provider lookup", extra={"ioc_type": ioc.type.value})
             return []
 
         results = []
@@ -118,6 +120,7 @@ class ThreatIntelService:
                 total_reports = result.get("total_reports", 0)
                 ioc_service.add_enrichment(
                     db,
+                    ioc.tenant_id,
                     ioc.id,
                     provider,
                     result.get("reputation"),
@@ -139,7 +142,7 @@ class ThreatIntelService:
     ) -> dict[str, Any] | None:
         # Validate indicator before any external lookups
         if not self._validate_indicator(indicator, indicator_type):
-            logger.debug(f"Invalid indicator format: {indicator} ({indicator_type})")
+            logger.debug("Invalid indicator format rejected before provider lookup", extra={"ioc_type": indicator_type.value})
             return None
             
         providers = self._providers_for_type(indicator_type)
@@ -171,9 +174,12 @@ class ThreatIntelService:
 
     def _providers_for_type(self, indicator_type: IndicatorType) -> list[str]:
         providers = []
-        if indicator_type == IndicatorType.IP:
+        if indicator_type in {IndicatorType.IP, IndicatorType.IPV4, IndicatorType.IPV6}:
             providers = ["abuseipdb", "virustotal", "otx", "internal-heuristic"]
-        elif indicator_type in {IndicatorType.DOMAIN, IndicatorType.HASH, IndicatorType.URL}:
+        elif indicator_type in {
+            IndicatorType.DOMAIN, IndicatorType.HASH, IndicatorType.MD5,
+            IndicatorType.SHA1, IndicatorType.SHA256, IndicatorType.SHA512, IndicatorType.URL,
+        }:
             providers = ["virustotal", "otx", "internal-heuristic"]
         else:
             providers = ["internal-heuristic"]
@@ -295,7 +301,7 @@ class ThreatIntelService:
                 "risk_impact": 20 if score >= 75 else 10 if score >= 25 else 0,
             }
         except Exception:
-            logger.exception("AbuseIPDB lookup failed for %s", indicator)
+            logger.warning("AbuseIPDB lookup failed", extra={"provider": "abuseipdb"})
             return None
 
     def _lookup_virustotal(self, indicator: str, indicator_type: IndicatorType) -> dict[str, Any] | None:
@@ -303,8 +309,14 @@ class ThreatIntelService:
             return None
         endpoint_map = {
             IndicatorType.IP: "ip_addresses",
+            IndicatorType.IPV4: "ip_addresses",
+            IndicatorType.IPV6: "ip_addresses",
             IndicatorType.DOMAIN: "domains",
             IndicatorType.HASH: "files",
+            IndicatorType.MD5: "files",
+            IndicatorType.SHA1: "files",
+            IndicatorType.SHA256: "files",
+            IndicatorType.SHA512: "files",
             IndicatorType.URL: "urls",
         }
         endpoint = endpoint_map.get(indicator_type)
@@ -327,10 +339,10 @@ class ThreatIntelService:
                 "malicious_count": malicious,
                 "suspicious_count": suspicious,
                 "total_reports": total,
-                "risk_impact": 30 if indicator_type == IndicatorType.HASH and malicious > 0 else 20 if malicious > 0 else 10 if suspicious > 0 else 0,
+                "risk_impact": 30 if indicator_type in {IndicatorType.HASH, IndicatorType.MD5, IndicatorType.SHA1, IndicatorType.SHA256, IndicatorType.SHA512} and malicious > 0 else 20 if malicious > 0 else 10 if suspicious > 0 else 0,
             }
         except Exception:
-            logger.exception("VirusTotal lookup failed for %s", indicator)
+            logger.warning("VirusTotal lookup failed", extra={"provider": "virustotal"})
             return None
 
     def _lookup_otx(self, indicator: str, indicator_type: IndicatorType) -> dict[str, Any] | None:
@@ -340,8 +352,14 @@ class ThreatIntelService:
             # Map indicator types to OTX section
             section_map = {
                 IndicatorType.IP: "IPv4",
+                IndicatorType.IPV4: "IPv4",
+                IndicatorType.IPV6: "IPv6",
                 IndicatorType.DOMAIN: "domain",
                 IndicatorType.HASH: "file",
+                IndicatorType.MD5: "file",
+                IndicatorType.SHA1: "file",
+                IndicatorType.SHA256: "file",
+                IndicatorType.SHA512: "file",
                 IndicatorType.URL: "url",
             }
             section = section_map.get(indicator_type)
@@ -363,7 +381,7 @@ class ThreatIntelService:
                 "risk_impact": 20 if pulse_count > 0 else 0,
             }
         except Exception:
-            logger.exception("OTX lookup failed for %s", indicator)
+            logger.warning("OTX lookup failed", extra={"provider": "otx"})
             return None
 
     def _lookup_internal_heuristic(self, indicator: str, indicator_type: IndicatorType) -> dict[str, Any] | None:

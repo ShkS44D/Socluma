@@ -1,4 +1,4 @@
-# Incident Intelligence and Copilot
+# Incident Intelligence and Triage AI
 
 This document describes the implemented incident provenance and incident-scoped AI behavior in TriageOps.
 
@@ -66,7 +66,7 @@ flowchart LR
     Alert --> Correlation["Tenant-scoped correlation"]
     Correlation --> Incident["Incident"]
     Incident --> Explanation["Deterministic explanation"]
-    Explanation --> Copilot["Grounded Copilot context"]
+    Explanation --> Triage AI["Grounded Triage AI context"]
 ```
 
 ## Explanation API
@@ -91,9 +91,9 @@ Large alert and event collections are bounded by validated query limits. Existin
 
 The official risk score is deterministic. It combines base severity (low 10, medium 20, high 30, critical 40), bounded multiple-alert, suspicious-behavior, threat-intelligence, asset-criticality, MITRE-impact, and analyst-feedback factors. The breakdown includes the uncapped total and any bounding adjustment, so its numeric components always reconcile to the final 0-100 score. AI output cannot change the official score.
 
-## Copilot Data Access
+## Triage AI Data Access
 
-The Copilot may read only controlled views of the current incident:
+The Triage AI may read only controlled views of the current incident:
 
 - Summary and origin.
 - Related alerts and source events.
@@ -126,9 +126,9 @@ No additional environment variables are required for incident provenance or dete
 2. Open the generated incident and review **How This Incident Was Created**.
 3. Follow the displayed event, rule, alert, correlation, and incident chain.
 4. Review the primary alert, correlated alerts, entities, IOCs, risk factors, MITRE mapping, evidence, and limitations.
-5. Select **Open Copilot** and ask: `Why was this incident created?`
+5. Select **Open Triage AI** and ask: `Why was this incident created?`
 6. Open the cited alert or event below the answer.
 7. Ask: `Which evidence supports the severity?` and `What should I investigate next?`
 8. Temporarily omit `OPENAI_API_KEY` in a development environment to demonstrate that deterministic fallback analysis remains available.
 
-The Copilot enhances the deterministic explanation; it does not replace or alter the underlying incident evidence.
+The Triage AI enhances the deterministic explanation; it does not replace or alter the underlying incident evidence.

@@ -1,5 +1,5 @@
 import api from './client'
-import { AuthResponse, User } from './types'
+import { AccountSecurityStatus, AuthResponse, AuthSecurityEvent, AuthSession, LoginResponse, User } from './types'
 
 export const register = async (data: {
   email: string
@@ -15,10 +15,61 @@ export const register = async (data: {
 export const login = async (data: {
   email: string
   password: string
-}): Promise<AuthResponse> => {
-  const response = await api.post<AuthResponse>('/api/v1/auth/login', data)
+}): Promise<LoginResponse> => {
+  const response = await api.post<LoginResponse>('/api/v1/auth/login', data)
   return response.data
 }
+
+export const completeMfaLogin = async (data: {
+  challenge_token: string
+  code: string
+  recovery_code: boolean
+}): Promise<LoginResponse> => {
+  const response = await api.post<LoginResponse>('/api/v1/auth/mfa/complete', data)
+  return response.data
+}
+
+export const requestPasswordReset = async (email: string): Promise<string> =>
+  (await api.post('/api/v1/auth/password-reset/request', { email })).data.detail
+
+export const completePasswordReset = async (token: string, newPassword: string): Promise<string> =>
+  (await api.post('/api/v1/auth/password-reset/complete', { token, new_password: newPassword })).data.detail
+
+export const requestEmailVerification = async (email: string): Promise<string> =>
+  (await api.post('/api/v1/auth/email-verification/request', { email })).data.detail
+
+export const confirmEmailVerification = async (token: string): Promise<string> =>
+  (await api.post('/api/v1/auth/email-verification/confirm', { token })).data.detail
+
+export const getAccountSecurityStatus = async (): Promise<AccountSecurityStatus> =>
+  (await api.get('/api/v1/account/security/status')).data
+
+export const startMfa = async (currentPassword: string) =>
+  (await api.post('/api/v1/account/security/mfa/start', { current_password: currentPassword })).data as {
+    qr_code_data_url: string; manual_key: string; provisioning_uri: string; expires_at: string
+  }
+
+export const confirmMfa = async (code: string): Promise<string[]> =>
+  (await api.post('/api/v1/account/security/mfa/confirm', { code })).data.recovery_codes
+
+export const disableMfa = async (currentPassword: string, code: string): Promise<void> => {
+  await api.post('/api/v1/account/security/mfa/disable', { current_password: currentPassword, code })
+}
+
+export const regenerateRecoveryCodes = async (currentPassword: string, code: string): Promise<string[]> =>
+  (await api.post('/api/v1/account/security/recovery-codes/regenerate', {
+    current_password: currentPassword, code,
+  })).data.recovery_codes
+
+export const getAuthSessions = async (): Promise<AuthSession[]> =>
+  (await api.get('/api/v1/account/security/sessions')).data.items
+
+export const revokeAuthSession = async (id: string): Promise<void> => {
+  await api.delete(`/api/v1/account/security/sessions/${id}`)
+}
+
+export const getAuthSecurityEvents = async (): Promise<AuthSecurityEvent[]> =>
+  (await api.get('/api/v1/account/security/events')).data.items
 
 export const getMe = async (): Promise<User> => {
   const response = await api.get<User>('/api/v1/auth/me')

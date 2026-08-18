@@ -33,9 +33,11 @@ import {
   EmptyState,
 } from '../components/ui'
 import DetectionRuleFormModal from '../components/detection-rules/DetectionRuleFormModal'
+import { usePermissionStore } from '../store'
 
 const DetectionRules: React.FC = () => {
   const navigate = useNavigate()
+  const can = usePermissionStore((state) => state.can)
   const [rules, setRules] = useState<DetectionRule[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -172,6 +174,13 @@ const DetectionRules: React.FC = () => {
       ),
     },
     {
+      key: 'lifecycle',
+      header: 'Lifecycle',
+      render: (rule) => (
+        <StatusChip label={rule.lifecycle_status || (rule.enabled ? 'production' : 'disabled')} />
+      ),
+    },
+    {
       key: 'query',
       header: 'Query',
       render: (rule) => (
@@ -206,7 +215,7 @@ const DetectionRules: React.FC = () => {
           >
             View
           </Button>
-          <Button
+          {can('detections.update') && <Button
             variant="outlined"
             size="small"
             onClick={(e) => {
@@ -216,8 +225,8 @@ const DetectionRules: React.FC = () => {
             }}
           >
             Edit
-          </Button>
-          <Button
+          </Button>}
+          {can('detections.enable') && <Button
             variant="outlined"
             size="small"
             color={rule.enabled ? 'warning' : 'success'}
@@ -232,15 +241,15 @@ const DetectionRules: React.FC = () => {
             }}
           >
             {rule.enabled ? 'Disable' : 'Enable'}
-          </Button>
-          <Button
+          </Button>}
+          {can('detections.delete') && <Button
             variant="outlined"
             color="error"
             size="small"
             onClick={() => handleDelete(rule.id)}
           >
             Delete
-          </Button>
+          </Button>}
         </Stack>
       ),
     },
@@ -263,6 +272,11 @@ const DetectionRules: React.FC = () => {
           { label: 'Operations', href: '/dashboard' },
           { label: 'Detection Rules' },
         ]}
+        actions={
+          <Button variant="outlined" onClick={() => navigate('/detection-engineering')}>
+            Engineering Workspace
+          </Button>
+        }
       />
 
       <Box sx={{ width: '100%', overflow: 'hidden' }}>
@@ -304,7 +318,7 @@ const DetectionRules: React.FC = () => {
 
       <SectionCard
         title="Detection Rules"
-        action={
+        action={can('detections.create') ? (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -315,7 +329,7 @@ const DetectionRules: React.FC = () => {
           >
             Create Detection Rule
           </Button>
-        }
+        ) : undefined}
       >
         <Box sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <TextField

@@ -3,6 +3,7 @@ import { Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogCont
 import { Add as AddIcon } from '@mui/icons-material'
 import { ErrorState, LoadingState, PageHeader } from '../components/ui'
 import { createOrganizationInvitation, getCurrentOrganization, listOrganizationInvitations, OrganizationInvitation, OrganizationRole } from '../services/api'
+import { usePermissionStore } from '../store'
 
 const OrganizationInvitations: React.FC = () => {
   const [organizationId, setOrganizationId] = useState('')
@@ -13,6 +14,7 @@ const OrganizationInvitations: React.FC = () => {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<OrganizationRole>('analyst')
   const [createdToken, setCreatedToken] = useState<string | null>(null)
+  const can = usePermissionStore((state) => state.can)
 
   const load = async () => {
     try {
@@ -52,7 +54,7 @@ const OrganizationInvitations: React.FC = () => {
       <PageHeader
         title="Invitations"
         description="Invite users to the current organization"
-        actions={<Button startIcon={<AddIcon />} variant="contained" onClick={() => setDialogOpen(true)}>Invite User</Button>}
+        actions={can('users.invite') ? <Button startIcon={<AddIcon />} variant="contained" onClick={() => setDialogOpen(true)}>Invite User</Button> : undefined}
       />
       {createdToken && (
         <Card sx={{ mt: 3 }}>

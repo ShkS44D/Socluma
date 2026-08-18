@@ -3,7 +3,7 @@
 ## Initial migration plan
 
 1. Preserve Git and secret safety, then inventory every active and historical Gemini reference.
-2. Replace configuration, dependencies, provider calls, error mapping, health metadata, tests, UI labels, and documentation with OpenAI Responses API equivalents while preserving the current Copilot contract and deterministic fallback.
+2. Replace configuration, dependencies, provider calls, error mapping, health metadata, tests, UI labels, and documentation with OpenAI Responses API equivalents while preserving the current Triage AI contract and deterministic fallback.
 3. Verify schema compatibility for new `openai` records and historical `gemini` records; add a migration only if the database constrains provider values.
 4. Run automated backend, collector, frontend, migration, browser, and container checks before any live request.
 5. Recreate backend and worker, perform at most one controlled OpenAI availability request, and continue grounding evaluation only if that request succeeds.
@@ -20,7 +20,7 @@
 ## Final implementation state
 
 - Active provider: OpenAI Responses API through the official `openai==2.45.0` SDK.
-- Copilot output: Pydantic Structured Output with server-side evidence validation and backend-generated navigation metadata.
+- Triage AI output: Pydantic Structured Output with server-side evidence validation and backend-generated navigation metadata.
 - Request controls: configured model, medium reasoning, 2,000 output-token cap, 60-second timeout, `store=False`, no tools, and SDK retries disabled.
 - Fallback: `triageops-deterministic-v1` preserved for missing configuration and all classified provider/structured-output/evidence failures.
 - Database: no migration required; provider/model audit data is stored in unconstrained strings/JSON, so historical Gemini values remain readable.

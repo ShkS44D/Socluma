@@ -1,338 +1,321 @@
 # TriageOps
 
-TriageOps is an AI-assisted SOC operations platform for security event ingestion, detection rules, alerts, incidents, IOC enrichment, collectors, playbooks, SOAR response actions, investigation copilot workflows, authentication, and real-time analyst updates.
+TriageOps is an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
 
-The current product is a modular monolith intended to evolve into a commercial enterprise SOC platform. The released scope in this repository is the backend API, analyst frontend, collector agent, PostgreSQL/SQLite persistence, Redis-backed operational services, Celery workers, versioned playbooks, SOAR connectors, AI investigation assistance, structured logging, health checks, and Prometheus metrics.
+The repository contains a FastAPI backend, a React analyst console, a Python collector agent, database migrations, background workers, and Docker configurations for development and production-style deployments.
 
-## Repository Layout
+> **Project status:** TriageOps is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
 
-- `backend`: FastAPI API, SQLAlchemy models, Alembic migrations, authentication, detection, incident correlation, health checks, metrics, and Celery worker tasks.
-- `frontend`: React, TypeScript, Vite, and Material UI analyst console.
-- `collector-agent`: Lightweight Python collector that authenticates to the backend and submits heartbeat and event data.
-- `docker`: Development and production-style Compose files plus Nginx reverse proxy configuration.
+## Core capabilities
 
-## Local Development
+- Security-event ingestion from authenticated collectors and API clients
+- Sigma-style detection rules, testing, simulation, versioning, and approval workflows
+- Alert triage, incident correlation, evidence timelines, and MITRE ATT&CK mapping
+- IOC enrichment, sightings, watchlists, hunting, imports, exports, and provider integrations
+- Tenant-isolated organizations, memberships, granular permissions, quotas, and audit trails
+- Investigation workspaces, saved searches, relationship graphs, reports, and evidence snapshots
+- Playbooks and SOAR actions through webhook, Slack, Microsoft Teams, SMTP, and REST connectors
+- AI-assisted incident summaries, alert explanations, timelines, reports, and analyst conversations
+- PostgreSQL or SQLite persistence, Redis-backed services, Celery workers, health checks, and Prometheus metrics
+- Windows and Linux collector support with local spooling, signed batches, and checkpoint recovery
 
-### Backend
+AI features are evidence-scoped and audited. When `OPENAI_API_KEY` is not configured, local development and tests can use deterministic fallback behavior.
+
+## Architecture
+
+| Component | Technology | Purpose |
+| --- | --- | --- |
+| `backend` | Python, FastAPI, SQLAlchemy, Alembic | API, authentication, detection, investigations, IOC workflows, SOAR, and persistence |
+| `frontend` | React, TypeScript, Vite, Material UI | Browser-based SOC analyst console |
+| `collector-agent` | Python | Windows/Linux event collection, batching, retry, and heartbeat delivery |
+| `docker` | Docker Compose, Nginx | Development and production-style service orchestration |
+| `docs` | Markdown | Operational, security, architecture, and feature documentation |
+
+The complete Docker stack consists of the frontend, backend API, Celery worker, PostgreSQL, Redis, and optional pgAdmin. The production-style stack adds Nginx as the public reverse proxy.
+
+## Requirements
+
+Choose either Docker or a local development setup.
+
+### Docker setup
+
+- Docker Desktop or Docker Engine
+- Docker Compose v2
+- Git
+
+### Local setup
+
+- Python 3.12 (Python 3.11 is also used by the production backend image)
+- Node.js 22 or newer
+- npm 11 or newer
+- Git
+- PostgreSQL and Redis only when not using the default SQLite and in-process Redis substitutes
+
+## Quick start with Docker
+
+Docker is the easiest way to run the complete application.
+
+1. Clone the repository and enter its directory:
+
+   ```powershell
+   git clone <private-repository-url>
+   Set-Location TriageOps
+   ```
+
+2. Create local environment files:
+
+   ```powershell
+   Copy-Item backend\.env.example backend\.env
+   Copy-Item frontend\.env.example frontend\.env
+   ```
+
+3. Review `backend/.env`. Local placeholder values are suitable only for development. Never commit `.env` files.
+
+4. Build and start the stack:
+
+   ```powershell
+   docker compose -f docker\docker-compose.yml up --build -d
+   ```
+
+5. Check service status:
+
+   ```powershell
+   docker compose -f docker\docker-compose.yml ps
+   Invoke-RestMethod http://localhost:8001/health/ready
+   ```
+
+6. Open the application:
+
+   - Analyst console: `http://localhost:3000`
+   - Backend API: `http://localhost:8001`
+   - API documentation: `http://localhost:8001/docs`
+   - Prometheus metrics: `http://localhost:8001/metrics`
+   - pgAdmin: `http://localhost:5050`
+
+The backend container applies Alembic migrations when it starts. To create an initial administrator automatically, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `backend/.env` before the first startup. You can also register a user through the application.
+
+Stop the stack without deleting database volumes:
 
 ```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8001
+docker compose -f docker\docker-compose.yml down
 ```
 
-Local development defaults to SQLite and development-only generated secrets. Production mode requires explicit strong secrets, PostgreSQL, Redis, and non-wildcard trusted hosts.
+To remove the Docker-managed PostgreSQL and Redis data as well, use `down -v` only when permanent deletion is intended.
 
-Useful backend URLs:
+## Run locally without Docker
 
-- API root: `http://localhost:8001`
-- Swagger UI: `http://localhost:8001/docs`
-- Readiness: `http://localhost:8001/health/ready`
-- Liveness: `http://localhost:8001/health/live`
-- Full health: `http://localhost:8001/health`
-- Metrics: `http://localhost:8001/metrics`
+Use separate terminals for the backend and frontend.
 
-### Frontend
+### 1. Backend
+
+From the repository root:
 
 ```powershell
-cd frontend
-npm install
+Set-Location backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+$env:USE_SQLITE="true"
+$env:USE_REDIS_MOCK="true"
+python -m alembic upgrade head
+python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8001
+```
+
+If PowerShell blocks virtual-environment activation, run the following once for the current terminal and activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+The default local database is `backend/triageops.db`. It is runtime data and is excluded from Git.
+
+### 2. Frontend
+
+In another terminal, from the repository root:
+
+```powershell
+Set-Location frontend
+npm ci
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+$env:VITE_API_BASE_URL="http://localhost:8001"
 npm run dev
 ```
 
-The frontend runs on `http://localhost:3000`. Copy `frontend/.env.example` to `frontend/.env` when a local API URL is needed.
+Open `http://localhost:3000`.
 
-### Collector
+### 3. Optional background worker
 
-1. Register a collector through the API or collector UI.
-2. Copy the collector ID and token.
-3. Copy `collector-agent/.env.example` to `collector-agent/.env` or set the variables in your shell.
-4. Run the collector.
+Local development defaults to eager or in-process behavior where supported. To exercise the real asynchronous queue, run Redis and start a worker from the activated backend environment:
 
 ```powershell
-cd collector-agent
-pip install -r requirements.txt
+celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
+```
+
+Set `USE_REDIS_MOCK=false` and configure `REDIS_HOST` and `REDIS_PORT` first.
+
+## Collector agent
+
+Create a collector in TriageOps and securely retain the returned collector ID and one-time token. Then run:
+
+```powershell
+Set-Location collector-agent
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
 $env:COLLECTOR_ID="<collector-id>"
 $env:COLLECTOR_TOKEN="<collector-token>"
 $env:BACKEND_URL="http://localhost:8001"
 python main.py
 ```
 
-Collector requests use bearer authentication and include `X-Request-ID` for log correlation.
+Use an HTTPS backend URL outside local development. The account running the Windows collector must have permission to read the configured event-log channels. Installation helpers are available under `collector-agent/install`.
 
-## Authentication and Authorization
+## Configuration
 
-TriageOps uses JWT access tokens and database-backed refresh tokens. Refresh tokens are hashed at rest, rotated on use, grouped by token family, and revocable through logout or logout-all.
+Copy the supplied examples and keep real credentials only in untracked `.env` files or an approved secrets manager:
 
-Implemented authentication controls:
+- `backend/.env.example`: application, database, Redis, security, AI, email, telemetry, detection, search, audit, and IOC settings
+- `frontend/.env.example`: browser API base URL
+- `collector-agent/.env.example`: collector identity, backend URL, batching, spooling, channels, and logging
 
-- Login with account lockout after repeated failures.
-- Access token and refresh token issuance.
-- Refresh token rotation.
-- Logout and logout-all session revocation.
-- Password change with previous-session invalidation.
-- Password-change timestamp checks for old access tokens.
-- RBAC roles: `admin`, `analyst`, `responder`, and `viewer`.
+Important backend settings include:
 
-Event ingestion requires authentication. Browser and API users use JWTs. Collectors use collector bearer tokens. Collector authentication is intentionally separate from user authentication.
+| Setting | Purpose |
+| --- | --- |
+| `ENVIRONMENT` | Selects development or production validation rules |
+| `USE_SQLITE` | Uses SQLite locally when `true`; use PostgreSQL for production |
+| `DATABASE_URL_OVERRIDE` | Optional complete database connection URL |
+| `USE_REDIS_MOCK` | Allows local operation without Redis when `true` |
+| `SECRET_KEY`, `JWT_SECRET_KEY`, `REFRESH_TOKEN_SECRET` | Application and session signing secrets |
+| `COLLECTOR_TOKEN_SECRET` | Collector credential signing secret |
+| `BACKEND_CORS_ORIGINS`, `ALLOWED_HOSTS` | Trusted browser origins and HTTP hosts |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | Optional hosted AI provider configuration for local use |
+| `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY`, `OTX_API_KEY` | Optional threat-intelligence providers |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Optional initial administrator bootstrap |
 
-## Multi-Tenancy and Organizations
+Production mode rejects weak or missing security configuration. Do not reuse the development defaults.
 
-TriageOps supports multiple isolated organizations in one deployment. The existing tenant boundary is exposed as organization management so current APIs remain backward compatible while organization administration is available through dedicated endpoints and frontend pages.
+## Database migrations
 
-Implemented organization capabilities:
-
-- Organization profile, status, subscription plan, and quota fields.
-- Organization membership roles: `owner`, `administrator`, `soc_manager`, `analyst`, and `viewer`.
-- One user can belong to multiple organizations.
-- Authenticated tenant switching with fresh access and refresh tokens.
-- Email invitation lifecycle with hashed invitation tokens, expiration, accept, and reject.
-- Quota enforcement for users and collectors.
-- Usage views for users, collectors, events, alerts, playbooks, SOAR executions, storage, and API request counters.
-- Audit events for organization creation, updates, deletion, tenant switching, invitations, invitation decisions, and membership changes.
-
-Every existing operational resource continues to use `tenant_id` as the enforced organization boundary. Backend dependencies resolve the active organization from the authenticated session or collector token; clients cannot gain access by sending arbitrary tenant IDs.
-
-## Playbooks and SOAR
-
-Playbooks support versioning, publishing, activation, manual execution, approvals, execution logs, variables, and persisted execution steps. Playbook `action` steps can invoke the SOAR connector framework by referencing a connector ID and optional credential ID in step configuration.
-
-SOAR connectors are tenant-scoped and pluggable. Implemented connector types:
-
-- Webhook.
-- Slack incoming webhook.
-- Microsoft Teams incoming webhook.
-- SMTP email.
-- Generic REST API.
-
-Connector credentials are encrypted at rest and returned only as metadata/fingerprints. Action execution is persisted with request/response metadata, retry state, duration, worker ID, correlation ID, and request ID. Actions run through Celery workers in Redis-backed environments. Local development with `USE_REDIS_MOCK=true` runs SOAR tasks eagerly through the same service path so developers can work without Docker.
-
-## AI Investigation Copilot
-
-The AI Investigation Copilot helps analysts reason over tenant-scoped investigation evidence. It is not a general-purpose chatbot: every response is grounded in an authorized incident and its linked alerts, source events, detection rules, entities, IOCs, timeline entries, analyst notes, risk factors, and audit history.
-
-Each incident exposes a deterministic explanation at `GET /api/v1/incidents/{incident_id}/explanation`. The response identifies the primary alert, subsequent correlated alerts, source events, matching rules, correlation reasons, observed time window, affected entities, MITRE mappings, risk breakdown, evidence references, limitations, and recommended investigation questions. This explanation works without OpenAI and is the source of truth for the incident detail panel.
-
-After database migrations, synchronize the pinned offline MITRE ATT&CK Enterprise v18.1 reference catalog with `cd backend && python scripts/bootstrap_mitre_catalog.py`. The command is idempotent and makes no network request. See `INCIDENT_INTELLIGENCE.md` for catalog provenance, the correlation lifecycle, full-chain simulation, matrix modes, isolated browser acceptance, and troubleshooting.
-
-Provenance is labelled as recorded, manual, or legacy-derived. Historical incidents are never presented as having correlation facts that were not stored at creation time. Official risk scores remain deterministic and their components, including any 0-100 bounding adjustment, reconcile to the displayed total.
-
-Implemented AI capabilities:
-
-- Incident summaries with executive summary, technical summary, root cause, impact, recommended next steps, containment suggestions, MITRE ATT&CK suggestions, and confidence score.
-- Alert explanations that describe why a detection triggered, which fields matched, why the activity is suspicious, false-positive considerations, and recommended analyst actions.
-- IOC analysis using existing enrichment data before LLM prompting.
-- Chronological investigation timelines from events, alerts, incidents, comments, playbooks, and SOAR actions.
-- Incident-scoped Copilot conversations with persisted conversation history.
-- Evidence citations, confidence, limitations, provider/model metadata, and suggested follow-up questions on Copilot answers.
-- Markdown incident reports suitable for PDF rendering/export.
-- Detection-rule suggestions based on recent tenant incidents.
-- Playbook suggestions based on incident or recent tenant activity.
-
-AI API endpoints:
-
-- `POST /api/v1/ai/incident/{incident_id}/summary`
-- `POST /api/v1/ai/incident/{incident_id}/chat`
-- `GET /api/v1/ai/incident/{incident_id}/conversations`
-- `GET /api/v1/ai/incident/{incident_id}/conversations/{conversation_id}`
-- `POST /api/v1/ai/incident/{incident_id}/timeline`
-- `POST /api/v1/ai/incident/{incident_id}/report`
-- `POST /api/v1/ai/alert/{alert_id}/explain`
-- `POST /api/v1/ai/ioc/{ioc_id}/analyze`
-- `POST /api/v1/ai/detections/suggest`
-- `POST /api/v1/ai/playbooks/suggest`
-
-All AI endpoints require authentication, enforce RBAC, resolve tenant scope from the authenticated session, and create audit events. Conversation history is scoped to the tenant, incident, and current user. Prompt construction redacts sensitive fields and inline credential assignments such as passwords, API keys, tokens, refresh tokens, JWTs, connector credentials, and private keys. Prompt size is bounded, known prompt-injection phrases in evidence are filtered, and Copilot chat has a per-conversation rate limit. Context selection deterministically prioritizes incident origin, the primary alert, correlation and risk factors, high-value evidence, entities, IOCs, timeline boundaries, notes, MITRE mappings, and recent conversation turns. Safe response metadata reports inclusion, omission, and context-size totals without exposing prompts.
-
-Generated artifacts and conversation messages are stored in the database for auditability and later review. If `OPENAI_API_KEY` is unavailable, the service returns deterministic evidence-based fallback analysis so workflows remain usable in local development and tests. Copilot calls use the OpenAI Responses API with Structured Outputs, `store=false`, and no tools.
-
-Copilot chat requests accept a client request ID for retry safety. Idempotency is scoped to the authenticated tenant, user, incident, conversation, and normalized question. A request already in progress returns a conflict response; an authorized retry after completion replays the stored result without another provider call or duplicate conversation messages. Redis provides the distributed in-flight lock when available, with a bounded process-local lock for degraded local operation. A request ID cannot be reused for a different question, user, tenant, or incident.
-
-See `INCIDENT_INTELLIGENCE.md` for the provenance model, API response structure, Copilot boundaries, and a verification workflow.
-
-Analysts participating in a controlled evaluation should also follow `PILOT_CHECKLIST.md` for evidence verification, AI claim reporting, and sensitive-data handling.
-
-## Observability
-
-Backend logs are structured JSON and include request correlation fields when available:
-
-- `request_id`
-- `tenant_id`
-- `user_id`
-- `collector_id`
-- `endpoint`
-- `execution_time_ms`
-- `severity`
-- `service`
-
-The API accepts inbound `X-Request-ID` and returns it on responses. The collector also sends request IDs with heartbeat and event submissions.
-
-For Windows channel configuration, supported Sigma syntax, rule testing, and
-USB Event 6416 diagnostics, see [DETECTION_RULE_TROUBLESHOOTING.md](DETECTION_RULE_TROUBLESHOOTING.md).
-
-Prometheus metrics are exposed at `/metrics` when `METRICS_ENABLED=true`. Current metrics include API latency and status codes, authentication outcomes, collector heartbeats, collector event ingestion, detection execution, alert creation, incident creation, WebSocket connections/events, Redis status, database health latency, queue health latency, worker execution time, connector execution totals, connector failures, retries, timeouts, execution duration, and approval latency.
-
-WebSocket connections support lightweight heartbeat messages so clients and proxies can detect stale connections without polling the REST API. Configure the heartbeat interval with `WEBSOCKET_HEARTBEAT_SECONDS`.
-
-## Health Checks
-
-Health endpoints return structured JSON and keep backward-compatible top-level fields for existing frontend consumers.
-
-- `/health/live`: process liveness.
-- `/health/ready`: readiness checks for required dependencies.
-- `/health`: full health report including degraded optional providers.
-
-Checks include database, Redis, worker broker reachability, AI provider configuration, threat intelligence provider configuration, storage, and migration status.
-
-## Environment Variables
-
-Common backend variables:
-
-- `ENVIRONMENT`: `development` or `production`.
-- `USE_SQLITE`: `true` for local SQLite, `false` for PostgreSQL.
-- `DATABASE_URL_OVERRIDE`: optional full database URL.
-- `POSTGRES_SERVER`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
-- `REDIS_HOST`, `REDIS_PORT`, `USE_REDIS_MOCK`.
-- `SECRET_KEY`, `JWT_SECRET_KEY`, `REFRESH_TOKEN_SECRET`, `COLLECTOR_TOKEN_SECRET`.
-- `ALLOWED_HOSTS`: JSON list of accepted hosts.
-- `BACKEND_CORS_ORIGINS`: JSON list of allowed frontend origins.
-- `RATE_LIMIT_DEFAULT`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_INGEST`, `RATE_LIMIT_STORAGE_URL`.
-- `METRICS_ENABLED`, `METRICS_PATH`.
-- `WEBSOCKET_HEARTBEAT_SECONDS`.
-- `SOAR_TASK_ALWAYS_EAGER`: execute SOAR Celery tasks inline for local/test workflows.
-- `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_SECONDS`, `OPENAI_MAX_OUTPUT_TOKENS`, `OPENAI_REASONING_EFFORT`.
-- `AI_CONTEXT_MAX_BYTES`: maximum serialized Copilot evidence context (default `65536`).
-- `AI_CONTEXT_ALERT_LIMIT`, `AI_CONTEXT_EVENT_LIMIT`, `AI_CONTEXT_ENTITY_LIMIT`, `AI_CONTEXT_IOC_LIMIT`, `AI_CONTEXT_EVIDENCE_LIMIT`.
-- `AI_CONTEXT_NOTE_LIMIT`, `AI_CONTEXT_AUDIT_LIMIT`, `AI_CONVERSATION_HISTORY_LIMIT`.
-- `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY`, `OTX_API_KEY`.
-- `ADMIN_EMAIL`, `ADMIN_PASSWORD` for optional bootstrap admin creation.
-
-Use `backend/.env.example`, `frontend/.env.example`, and `collector-agent/.env.example` as starting points.
-
-## Docker Development Stack
+Run migrations from `backend`:
 
 ```powershell
-docker compose -f docker/docker-compose.yml up --build
+python -m alembic heads
+python -m alembic upgrade head
+python -m alembic current
 ```
 
-Default development services:
+There should be exactly one Alembic head. Back up and verify production data before every migration.
 
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8001`
-- Metrics through Nginx: `http://localhost/metrics`
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
-- pgAdmin: `http://localhost:5050`
-
-The development stack uses bind mounts for fast iteration.
-
-If port 3000 serves stale frontend source after dependency or mount changes, recreate only the frontend container and its anonymous dependency volume. This preserves PostgreSQL and Redis data volumes:
+After migrations, load the pinned offline MITRE ATT&CK Enterprise catalog when required:
 
 ```powershell
-docker compose -f docker/docker-compose.yml up -d --no-deps --build --force-recreate --renew-anon-volumes frontend
+python scripts/bootstrap_mitre_catalog.py
 ```
 
-## Production-Style Docker Stack
+The catalog bootstrap is idempotent and does not require network access.
 
-The production Compose file uses multi-stage backend/frontend builds, static frontend serving through Nginx, non-root runtime users, PostgreSQL, Redis, backend, frontend, worker, health checks, and required production secrets.
+## Testing and validation
+
+### Backend test suite
+
+From the repository root:
 
 ```powershell
-$env:POSTGRES_USER="triageops"
-$env:POSTGRES_PASSWORD="<strong-password>"
-$env:POSTGRES_DB="triageops"
-$env:SECRET_KEY="<strong-secret>"
-$env:JWT_SECRET_KEY="<strong-secret>"
-$env:REFRESH_TOKEN_SECRET="<strong-secret>"
-$env:COLLECTOR_TOKEN_SECRET="<strong-secret>"
-$env:ALLOWED_HOSTS='["localhost","127.0.0.1","triageops.example.com"]'
-$env:BACKEND_CORS_ORIGINS='["https://triageops.example.com"]'
-$env:PUBLIC_PORT="8080"
-docker compose -f docker/docker-compose.prod.yml up --build
+python -m pip install -r backend\requirements-test.txt
+$env:PYTHONPATH="$PWD\backend"
+python -m pytest backend\tests -q
 ```
 
-## API Error Format
-
-API errors use a standard envelope:
-
-```json
-{
-  "timestamp": "2026-07-03T00:00:00Z",
-  "request_id": "request-id",
-  "status": 401,
-  "error_code": "unauthorized",
-  "message": "Not authenticated",
-  "detail": "Not authenticated",
-  "details": {},
-  "documentation_url": "https://docs.triageops.local/api/errors"
-}
-```
-
-The `detail` field is retained for backward compatibility with existing FastAPI clients.
-
-## Testing
-
-Backend regression tests:
+### Collector tests
 
 ```powershell
-python -m pip install -r backend/requirements-test.txt
-python -m pytest -q
-cd backend
-python -m pytest -q tests
-```
-
-The repository-level pytest configuration intentionally discovers `backend/tests/test_*.py`. Manual HTTP utilities are not test modules. Collector tests run separately from `collector-agent`.
-
-```powershell
-cd collector-agent
+Set-Location collector-agent
+$env:PYTHONPATH="..\backend;."
 python -m pytest -q
 ```
 
-Incident browser regression tests require a running backend/frontend and test credentials:
+### Frontend checks
 
 ```powershell
-cd frontend
+Set-Location frontend
+npm ci
+npm run lint
+npm run build
+```
+
+Browser tests require a running frontend and backend plus a dedicated test account:
+
+```powershell
+Set-Location frontend
 $env:E2E_BASE_URL="http://localhost:3000"
 $env:E2E_EMAIL="<test-user-email>"
 $env:E2E_PASSWORD="<test-user-password>"
 npm run test:e2e
 ```
 
-Run the isolated 100-incident performance and concurrent-load validation with SQLite:
+Do not use production accounts or production data for automated tests.
+
+## Production-style Docker deployment
+
+The production Compose configuration uses PostgreSQL, Redis, a backend worker, non-root application containers, health checks, a statically built frontend, and Nginx.
+
+Set strong, unique values in the deployment environment:
 
 ```powershell
-cd backend
-python scripts/incident_performance_validation.py --concurrency 8 --requests 80 --output validation.json
+$env:POSTGRES_USER="triageops"
+$env:POSTGRES_PASSWORD="<strong-database-password>"
+$env:POSTGRES_DB="triageops"
+$env:SECRET_KEY="<strong-random-secret>"
+$env:JWT_SECRET_KEY="<strong-random-secret>"
+$env:REFRESH_TOKEN_SECRET="<strong-random-secret>"
+$env:COLLECTOR_TOKEN_SECRET="<strong-random-secret>"
+$env:ALLOWED_HOSTS='["soc.example.com"]'
+$env:BACKEND_CORS_ORIGINS='["https://soc.example.com"]'
+$env:OPENAI_API_KEY="<provider-key>"
+$env:PUBLIC_PORT="8080"
+docker compose -f docker\docker-compose.prod.yml up --build -d
 ```
 
-For PostgreSQL, pass an isolated validation database URL. The database name must clearly identify it as a test/validation database; the harness creates and drops a unique schema and does not print credentials:
+Open `http://localhost:8080` for a local production-style check. For an internet-facing deployment, terminate TLS, restrict network exposure, use a managed secrets solution, configure backups, and monitor `/health/ready` and `/metrics`.
 
-```powershell
-cd backend
-$env:TEST_POSTGRES_DATABASE_URL="postgresql+psycopg://<user>:<password>@localhost:5432/triageops_batch63_validation"
-python scripts/incident_performance_validation.py --database-url $env:TEST_POSTGRES_DATABASE_URL --concurrency 8 --requests 80 --output validation-postgres-c8.json
-```
+## Health and observability
 
-Frontend production build:
+- `/health/live`: process liveness
+- `/health/ready`: required dependency and migration readiness
+- `/health`: detailed health report, including optional providers
+- `/metrics`: Prometheus metrics when `METRICS_ENABLED=true`
 
-```powershell
-cd frontend
-npm run build
-```
+Backend logs use structured JSON and include correlation fields such as request, tenant, user, collector, endpoint, duration, and severity identifiers.
 
-SQLite migration verification:
+## Documentation
 
-```powershell
-cd backend
-$env:USE_SQLITE="true"
-$env:DATABASE_URL_OVERRIDE="sqlite:///./migration-test.db"
-alembic upgrade head
-```
+- [Architecture](ARCHITECTURE.md)
+- [Windows and Docker run guide](docs/RUN_GUIDE.md)
+- [Authentication](docs/AUTHENTICATION.md)
+- [Authorization model](docs/AUTHORIZATION.md)
+- [Audit and data protection](docs/PHASE4_AUDIT_DATA_PROTECTION.md)
+- [Telemetry ingestion](docs/PHASE5_TELEMETRY_INGESTION.md)
+- [Search and investigations](docs/PHASE6_SEARCH_INVESTIGATIONS.md)
+- [Detection engineering](docs/PHASE7_DETECTION_ENGINEERING.md)
+- [IOC intelligence](docs/IOC_INTELLIGENCE.md)
+- [Incident intelligence](INCIDENT_INTELLIGENCE.md)
+- [Detection troubleshooting](DETECTION_RULE_TROUBLESHOOTING.md)
+- [Collector guide](collector-agent/README.md)
+- [Pilot guide](PILOT_GUIDE.md)
 
-PostgreSQL migrations can be verified with `TEST_POSTGRES_DATABASE_URL` or through the Docker stacks.
+## Security notes
 
-## Enterprise Foundation Notes
+- Never commit `.env` files, API keys, passwords, database files, collected events, logs, exports, or certificates.
+- Rotate any credential immediately if it is accidentally exposed.
+- Use HTTPS for browser, API, webhook, and collector traffic outside localhost.
+- Keep development defaults and synthetic demonstration data out of production.
+- Restrict connector destinations and credentials according to least privilege.
+- Treat AI output as analyst assistance, not verified evidence or an autonomous response decision.
 
-The current schema includes tenant-aware indexes for the primary SOC workloads: security events, alerts, incidents, collectors, IOCs, audit logs, notifications, detection matches, refresh tokens, and response-action records. List and dashboard queries use bounded pagination or aggregate database queries where implemented.
+## License
+
+No open-source license is currently included. Unless a license is added, the code remains private and all rights are reserved by the repository owner.

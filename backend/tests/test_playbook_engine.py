@@ -21,6 +21,8 @@ from src.models.sqlalchemy import (
     Tenant,
     User,
     UserRole,
+    OrganizationMembership,
+    OrganizationRole,
 )
 
 
@@ -70,11 +72,21 @@ class PlaybookEngineTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}-{len(role.value)}@example.com",
-            hashed_password=get_password_hash("Password123!"),
+            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )
         db.add(user)
+        db.flush()
+        db.add(OrganizationMembership(
+            tenant_id=tenant.id, user_id=user.id,
+            role={
+                UserRole.ADMIN: OrganizationRole.ADMINISTRATOR,
+                UserRole.ANALYST: OrganizationRole.ANALYST,
+                UserRole.VIEWER: OrganizationRole.VIEWER,
+            }[role],
+            is_active=True,
+        ))
         db.commit()
         db.refresh(user)
         user_id = user.id
