@@ -1,6 +1,6 @@
-# TriageOps Collector Agent
+# VigilantAI Collector Agent
 
-The TriageOps collector agent sends host telemetry and heartbeat updates to the TriageOps backend.
+The VigilantAI collector agent sends host telemetry and heartbeat updates to the VigilantAI backend.
 
 ## Supported Platforms
 
@@ -22,7 +22,7 @@ pip install -r requirements.txt
 
 ## Configure
 
-Register a collector in TriageOps first. The backend returns a collector ID and one-time token.
+Register a collector in VigilantAI first. The backend returns a collector ID and one-time token.
 
 Set:
 
@@ -68,7 +68,7 @@ The collector:
 
 ## Rotate Collector Credentials
 
-1. Sign in to TriageOps as an authorized administrator or analyst for the intended organization.
+1. Sign in to VigilantAI as an authorized administrator or analyst for the intended organization.
 2. Register a new collector and record the returned ID and one-time token in an approved secret store.
 3. Stop the old collector process.
 4. Update only the collector host's local configuration:
@@ -76,7 +76,7 @@ The collector:
    ```text
    COLLECTOR_ID=<new-collector-id>
    COLLECTOR_TOKEN=<new-one-time-token>
-   BACKEND_URL=https://<triageops-host>
+   BACKEND_URL=https://<vigilantai-host>
    ```
 
 5. Start the collector and verify a successful heartbeat and test event ingestion.

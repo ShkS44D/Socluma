@@ -12,17 +12,17 @@ services:
       - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
-      - POSTGRES_USER=triageops
-      - POSTGRES_PASSWORD=triageops_secret
-      - POSTGRES_DB=triageops
+      - POSTGRES_USER=vigilantai
+      - POSTGRES_PASSWORD=vigilantai_secret
+      - POSTGRES_DB=vigilantai
       - USE_SQLITE=false
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - USE_REDIS_MOCK=false
-      - SECRET_KEY=${SECRET_KEY:-triageops_dev_secret_change_me}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-triageops_dev_jwt_secret_change_me}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-triageops_dev_refresh_secret_change_me}
-      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-triageops_dev_collector_secret_change_me}
+      - SECRET_KEY=${SECRET_KEY:-vigilantai_dev_secret_change_me}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-vigilantai_dev_jwt_secret_change_me}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-vigilantai_dev_refresh_secret_change_me}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-vigilantai_dev_collector_secret_change_me}
       - BACKEND_CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
       - METRICS_ENABLED=true
       - METRICS_PATH=/metrics
@@ -59,17 +59,17 @@ services:
       - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
-      - POSTGRES_USER=triageops
-      - POSTGRES_PASSWORD=triageops_secret
-      - POSTGRES_DB=triageops
+      - POSTGRES_USER=vigilantai
+      - POSTGRES_PASSWORD=vigilantai_secret
+      - POSTGRES_DB=vigilantai
       - USE_SQLITE=false
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - USE_REDIS_MOCK=false
-      - SECRET_KEY=${SECRET_KEY:-triageops_dev_secret_change_me}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-triageops_dev_jwt_secret_change_me}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-triageops_dev_refresh_secret_change_me}
-      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-triageops_dev_collector_secret_change_me}
+      - SECRET_KEY=${SECRET_KEY:-vigilantai_dev_secret_change_me}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-vigilantai_dev_jwt_secret_change_me}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-vigilantai_dev_refresh_secret_change_me}
+      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:-vigilantai_dev_collector_secret_change_me}
       - METRICS_ENABLED=true
       - METRICS_PATH=/metrics
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.6-luna}
@@ -116,13 +116,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=triageops
-      - POSTGRES_PASSWORD=triageops_secret
-      - POSTGRES_DB=triageops
+      - POSTGRES_USER=vigilantai
+      - POSTGRES_PASSWORD=vigilantai_secret
+      - POSTGRES_DB=vigilantai
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U triageops -d triageops"]
+      test: ["CMD-SHELL", "pg_isready -U vigilantai -d vigilantai"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -146,7 +146,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@triageops.com
+      - PGADMIN_DEFAULT_EMAIL=admin@vigilantai.com
       - PGADMIN_DEFAULT_PASSWORD=admin
     ports:
       - "${PGADMIN_PORT:-5050}:80"

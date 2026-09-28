@@ -386,4 +386,4 @@ def content_packs(db: Session=Depends(get_db),user: User=Depends(require_permiss
 def export_pack(pack_id: str,db: Session=Depends(get_db),user: User=Depends(require_permission(Permission.DETECTIONS_EXPORT))):
     row=db.query(DetectionContentPack).filter_by(id=pack_id,tenant_id=user.tenant_id).first()
     if not row:raise HTTPException(404,detail={"error_code":"CONTENT_PACK_INVALID","message":"Content pack not found"})
-    return {"manifest":row.manifest,"checksum":row.checksum,"format":"triageops-json","safe_filename":f"{row.identifier}-{row.version}.json"}
+    return {"manifest":row.manifest,"checksum":row.checksum,"format":"vigilantai-json","safe_filename":f"{row.identifier}-{row.version}.json"}

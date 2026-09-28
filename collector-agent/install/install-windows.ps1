@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$EnrollmentToken,
   [Parameter(Mandatory=$true)][string]$BackendUrl,
-  [string]$InstallDirectory = "$env:ProgramData\TriageOps\Collector"
+  [string]$InstallDirectory = "$env:ProgramData\VigilantAI\Collector"
 )
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force -Path $InstallDirectory | Out-Null

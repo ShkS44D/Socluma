@@ -14,7 +14,7 @@ COMMON_PASSWORDS = {
     "letmein",
     "welcome123",
     "changeme",
-    "triageops",
+    "vigilantai",
 }
 
 

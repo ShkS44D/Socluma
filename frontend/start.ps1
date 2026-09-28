@@ -1,8 +1,8 @@
 
-# TriageOps Frontend Startup Script
+# VigilantAI Frontend Startup Script
 # Ensures frontend always starts on port 3000
 
-Write-Host "=== TriageOps Frontend Startup ===" -ForegroundColor Cyan
+Write-Host "=== VigilantAI Frontend Startup ===" -ForegroundColor Cyan
 
 $PORT = 3000
 

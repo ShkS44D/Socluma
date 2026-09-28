@@ -1,4 +1,4 @@
-# TriageOps MVP Architecture & Implementation Roadmap
+# VigilantAI MVP Architecture & Implementation Roadmap
 
 ## 1. MVP Scope Definition
 
@@ -59,7 +59,7 @@
 ## 3. MVP Folder Structure
 
 ```
-triageops/
+vigilantai/
 ├── backend/
 │   ├── src/
 │   │   ├── api/

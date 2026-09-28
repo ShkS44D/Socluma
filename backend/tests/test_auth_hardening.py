@@ -60,7 +60,7 @@ class AuthHardeningTests(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
 
-    def _register_admin(self, email: str = "admin@example.com", password: str = "TriageOps-Test-Passphrase-2026!") -> dict:
+    def _register_admin(self, email: str = "admin@example.com", password: str = "VigilantAI-Test-Passphrase-2026!") -> dict:
         response = self.client.post(
             "/api/v1/auth/register",
             json={
@@ -74,7 +74,7 @@ class AuthHardeningTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
-    def _login(self, email: str = "admin@example.com", password: str = "TriageOps-Test-Passphrase-2026!") -> dict:
+    def _login(self, email: str = "admin@example.com", password: str = "VigilantAI-Test-Passphrase-2026!") -> dict:
         response = self.client.post(
             "/api/v1/auth/login",
             json={"email": email, "password": password},
@@ -92,7 +92,7 @@ class AuthHardeningTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=email,
-            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
+            hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )
@@ -128,19 +128,19 @@ class AuthHardeningTests(unittest.TestCase):
 
         first_failure = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "WrongTriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "WrongVigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(first_failure.status_code, 401)
 
         second_failure = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "WrongTriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "WrongVigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(second_failure.status_code, 423)
 
         locked_login = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "TriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "VigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(locked_login.status_code, 423)
 
@@ -152,7 +152,7 @@ class AuthHardeningTests(unittest.TestCase):
 
         unlocked_login = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "TriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "VigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(unlocked_login.status_code, 200, unlocked_login.text)
 
@@ -222,8 +222,8 @@ class AuthHardeningTests(unittest.TestCase):
         change_response = self.client.post(
             "/api/v1/auth/change-password",
             json={
-                "current_password": "TriageOps-Test-Passphrase-2026!",
-                "new_password": "NewTriageOps-Test-Passphrase-2026!",
+                "current_password": "VigilantAI-Test-Passphrase-2026!",
+                "new_password": "NewVigilantAI-Test-Passphrase-2026!",
             },
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
@@ -243,13 +243,13 @@ class AuthHardeningTests(unittest.TestCase):
 
         old_password_response = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "TriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "VigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(old_password_response.status_code, 401)
 
         new_password_response = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "NewTriageOps-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "NewVigilantAI-Test-Passphrase-2026!"},
         )
         self.assertEqual(new_password_response.status_code, 200, new_password_response.text)
 
@@ -382,8 +382,8 @@ class AuthHardeningTests(unittest.TestCase):
             JWT_SECRET_KEY="short-jwt",
             REFRESH_TOKEN_SECRET="short-refresh",
             COLLECTOR_TOKEN_SECRET="short-collector",
-            ALLOWED_HOSTS=["triageops.example.com"],
-            BACKEND_CORS_ORIGINS=["https://triageops.example.com"],
+            ALLOWED_HOSTS=["vigilantai.example.com"],
+            BACKEND_CORS_ORIGINS=["https://vigilantai.example.com"],
         )
         with self.assertRaises(RuntimeError):
             production_settings.validate_for_runtime()

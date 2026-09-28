@@ -1,0 +1,22 @@
+[Unit]
+Description=VigilantAI Telemetry Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vigilantai-collector
+Group=vigilantai-collector
+WorkingDirectory=/opt/vigilantai-collector
+EnvironmentFile=/etc/vigilantai-collector.env
+ExecStart=/opt/vigilantai-collector/venv/bin/python main.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/vigilantai-collector
+
+[Install]
+WantedBy=multi-user.target

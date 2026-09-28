@@ -100,7 +100,7 @@ def export_stix_bundle(iocs: list, *, allow_tlp_red: bool = False) -> dict:
     manifest = hashlib.sha256(json.dumps(objects, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {
         "type": "bundle", "id": f"bundle--{uuid.uuid5(uuid.NAMESPACE_URL, manifest)}",
-        "objects": objects, "x_triageops_manifest_sha256": manifest,
+        "objects": objects, "x_vigilantai_manifest_sha256": manifest,
     }
 
 

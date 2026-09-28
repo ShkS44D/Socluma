@@ -1,4 +1,4 @@
-# TriageOps Controlled Pilot Checklist
+# VigilantAI Controlled Pilot Checklist
 
 ## Before A Pilot Session
 
@@ -9,7 +9,7 @@
 ## During Investigation
 
 - Treat stored alerts, events, rules, timestamps, entities, and evidence references as confirmed only after opening the cited record.
-- Treat Triage AI recommendations, hypotheses, containment guidance, and uncertainty statements as analyst assistance, not completed actions.
+- Treat VigilantAI Copilot recommendations, hypotheses, containment guidance, and uncertainty statements as analyst assistance, not completed actions.
 - Do not assume a Playbook, connector action, block, closure, or containment step occurred unless its execution record confirms completion.
 - Record missing evidence and uncertain conclusions before changing incident status.
 

@@ -23,15 +23,15 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system triageops \
-    && useradd --system --gid triageops --home-dir /app triageops
+    && groupadd --system vigilantai \
+    && useradd --system --gid vigilantai --home-dir /app vigilantai
 
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
-COPY --chown=triageops:triageops . .
+COPY --chown=vigilantai:vigilantai . .
 
-USER triageops
+USER vigilantai
 
 EXPOSE 8000
 

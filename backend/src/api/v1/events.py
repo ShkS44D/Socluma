@@ -299,10 +299,10 @@ def simulate_attack(
             event_payload[section].update({
                 "synthetic": True,
                 "simulation_run_id": run_id,
-                "hostname": f"triageops-sim-{run_id[:8]}",
+                "hostname": f"vigilantai-sim-{run_id[:8]}",
                 "agent_id": f"sim-agent-{run_id[:8]}",
                 "source_ip": f"10.{run_octets[0]}.{run_octets[1]}.{max(1, run_octets[2])}",
-                "source_host": f"triageops-sim-source-{run_id[:8]}",
+                "source_host": f"vigilantai-sim-source-{run_id[:8]}",
                 "user": f"synthetic-user-{run_id[:8]}",
             })
         event_data = SecurityEventCreate(**event_payload)

@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import Request, status
 
 
-DEFAULT_DOCS_URL = "https://docs.triageops.local/api/errors"
+DEFAULT_DOCS_URL = "https://docs.vigilantai.local/api/errors"
 
 ERROR_CODE_BY_STATUS = {
     status.HTTP_400_BAD_REQUEST: "bad_request",

@@ -106,7 +106,7 @@ def manifest(paths: list[Path]) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate and test TriageOps detection content")
+    parser = argparse.ArgumentParser(description="Validate and test VigilantAI detection content")
     commands = parser.add_subparsers(dest="command", required=True)
     validation = commands.add_parser("validate")
     validation.add_argument("files", nargs="+", type=Path)

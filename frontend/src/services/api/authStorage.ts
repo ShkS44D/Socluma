@@ -1,7 +1,7 @@
-export const AUTH_TOKEN_STORAGE_KEY = 'triageops.auth.accessToken'
-export const REFRESH_TOKEN_STORAGE_KEY = 'triageops.auth.refreshToken'
+export const AUTH_TOKEN_STORAGE_KEY = 'vigilantai.auth.accessToken'
+export const REFRESH_TOKEN_STORAGE_KEY = 'vigilantai.auth.refreshToken'
 export const LEGACY_AUTH_TOKEN_STORAGE_KEY = 'token'
-export const AUTH_LOGOUT_EVENT = 'triageops:auth-logout'
+export const AUTH_LOGOUT_EVENT = 'vigilantai:auth-logout'
 
 const decodeBase64Url = (value: string): string => {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/')

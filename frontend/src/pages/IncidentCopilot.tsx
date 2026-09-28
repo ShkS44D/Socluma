@@ -98,7 +98,7 @@ const IncidentCopilot: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 1100, mx: 'auto' }}>
-      <PageHeader title="Triage AI" description="OpenAI-powered answers grounded only in tenant-scoped incident evidence" />
+      <PageHeader title="VigilantAI Copilot" description="OpenAI-powered answers grounded only in tenant-scoped incident evidence" />
       {error && <ErrorState message={error} onRetry={() => setError(null)} />}
       <Card sx={{ mt: 3 }}>
         <CardContent>
@@ -117,7 +117,7 @@ const IncidentCopilot: React.FC = () => {
               ))}
             </Stack>
             <Stack direction="row" spacing={1}>
-              <Button disabled={!incidentId || loading} variant="contained" onClick={askCopilot}>{loading ? 'Working...' : 'Ask Triage AI'}</Button>
+              <Button disabled={!incidentId || loading} variant="contained" onClick={askCopilot}>{loading ? 'Working...' : 'Ask VigilantAI Copilot'}</Button>
               <Button disabled={!incidentId || loading} variant="outlined" onClick={() => run(async () => setSummary(await generateIncidentSummary(incidentId)))}>
                 Generate Summary
               </Button>
@@ -206,7 +206,7 @@ const IncidentCopilot: React.FC = () => {
                   }}
                 >
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                    <Chip size="small" label={item.role === 'user' ? 'Analyst' : 'Triage AI'} />
+                    <Chip size="small" label={item.role === 'user' ? 'Analyst' : 'VigilantAI Copilot'} />
                     <Typography variant="caption" color="text.secondary">
                       {formatDateTimePKT(item.created_at)}
                     </Typography>

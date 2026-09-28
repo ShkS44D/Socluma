@@ -29,7 +29,7 @@ class BackendSeverity:
     HIGH = "high"
     CRITICAL = "critical"
 
-class TriageOpsAPIClient:
+class VigilantAIAPIClient:
     def __init__(self, config: Config):
         self.config = config
         self.session = self._build_session()
@@ -56,7 +56,7 @@ class TriageOpsAPIClient:
             "Authorization": f"Bearer {self.config.COLLECTOR_TOKEN}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "triageops-collector/1.0",
+            "User-Agent": "vigilantai-collector/1.0",
             "Connection": "close",
         })
         return session

@@ -72,7 +72,7 @@ class PlaybookEngineTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}-{len(role.value)}@example.com",
-            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
+            hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )

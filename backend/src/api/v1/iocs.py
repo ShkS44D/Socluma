@@ -136,7 +136,7 @@ def export_stix(
     audit_service.record(
         db, action="stix_exported", user=current_user, resource_type="stix_bundle",
         resource_id=bundle["id"], ip_address=_client_ip(request),
-        details={"objects": len(bundle["objects"]), "manifest": bundle["x_triageops_manifest_sha256"]},
+        details={"objects": len(bundle["objects"]), "manifest": bundle["x_vigilantai_manifest_sha256"]},
     )
     return bundle
 

@@ -41,7 +41,7 @@ const ConnectorDetail: React.FC = () => {
   const [credentialName, setCredentialName] = useState('')
   const [secret, setSecret] = useState('{}')
   const [actionName, setActionName] = useState('notify')
-  const [requestBody, setRequestBody] = useState('{"message":"TriageOps test action"}')
+  const [requestBody, setRequestBody] = useState('{"message":"VigilantAI test action"}')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 

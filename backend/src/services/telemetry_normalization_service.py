@@ -79,7 +79,7 @@ class TelemetryNormalizationService:
             reasons.append("invalid_or_missing_timestamp")
         extensions = self._bounded_extensions(raw_event)
         normalized = {
-            "metadata": {"version": "1.0", "product": {"name": "TriageOps"}, "source": source},
+            "metadata": {"version": "1.0", "product": {"name": "VigilantAI"}, "source": source},
             "time": timestamp.isoformat().replace("+00:00", "Z"),
             "class_name": merged.get("class_name") or event_type.value,
             "category_name": merged.get("category_name") or self._category(event_type),

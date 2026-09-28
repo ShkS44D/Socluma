@@ -16,8 +16,8 @@ export const login = async (page: Page): Promise<void> => {
     cachedAuth = { accessToken: tokenPair.access_token, refreshToken: tokenPair.refresh_token }
     await page.goto('/login')
     await page.evaluate(({ accessToken, refreshToken }) => {
-      localStorage.setItem('triageops.auth.accessToken', accessToken)
-      localStorage.setItem('triageops.auth.refreshToken', refreshToken)
+      localStorage.setItem('vigilantai.auth.accessToken', accessToken)
+      localStorage.setItem('vigilantai.auth.refreshToken', refreshToken)
     }, cachedAuth)
     await page.goto('/dashboard')
     await expect(page).toHaveURL(/\/dashboard$/)
@@ -29,8 +29,8 @@ export const login = async (page: Page): Promise<void> => {
   await page.getByRole('button', { name: 'Sign In' }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
   cachedAuth = await page.evaluate(() => ({
-    accessToken: localStorage.getItem('triageops.auth.accessToken') || '',
-    refreshToken: localStorage.getItem('triageops.auth.refreshToken') || '',
+    accessToken: localStorage.getItem('vigilantai.auth.accessToken') || '',
+    refreshToken: localStorage.getItem('vigilantai.auth.refreshToken') || '',
   }))
 }
 

@@ -30,7 +30,7 @@ Stable permissions are defined in `backend/src/core/permissions.py` and grouped
 for the role editor. They separate view, create, update, assign, close, enable,
 delete, execute, approve, export, and security-management operations across
 users, roles, organizations, alerts, incidents, detections, Sigma, playbooks,
-SOAR, threat intelligence, audit, Triage AI, collectors, API keys,
+SOAR, threat intelligence, audit, VigilantAI Copilot, collectors, API keys,
 subscriptions, usage, reports, assets, notifications, and settings.
 
 - **Owner:** all organization permissions, including protected security,
@@ -42,7 +42,7 @@ subscriptions, usage, reports, assets, notifications, and settings.
   analysts, reports, and response workflows without ownership or critical
   security authority.
 - **Analyst:** investigation, alert/incident work, evidence-oriented resources,
-  and Triage AI without user, role, credential, or organization-security
+  and VigilantAI Copilot without user, role, credential, or organization-security
   administration.
 - **Viewer:** explicit read-only operational access.
 
@@ -108,7 +108,7 @@ policies. Tenant routers use explicit permissions:
 | Detections/Sigma | `detections.view`, `sigma.view` | create/update/enable/delete permissions |
 | Playbooks/SOAR | `playbooks.view`, `soar.view` | create/update/publish/execute/approve and credential permissions |
 | Telemetry/intelligence | collector, alert, asset, and threat-intelligence view permissions | explicit manage/revoke/create permissions |
-| Triage AI | `triage_ai.use` | management remains separately reserved |
+| VigilantAI Copilot | `triage_ai.use` | management remains separately reserved |
 | Usage/subscription/reporting | `usage.view`, `subscriptions.view`, `reports.view` | export permissions where applicable |
 
 Health and intentionally public authentication endpoints have no tenant

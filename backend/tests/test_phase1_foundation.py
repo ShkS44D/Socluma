@@ -61,7 +61,7 @@ def _owner_and_org(db):
     owner = User(
         tenant_id=primary.id,
         email="phase1-owner@example.com",
-        hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
+        hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
         role=UserRole.ADMIN,
     )
     db.add(owner)
@@ -101,7 +101,7 @@ def test_wrong_pin_lockout_and_non_owner_cannot_cancel(db):
     viewer = User(
         tenant_id=target.id,
         email="phase1-viewer@example.com",
-        hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
+        hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
         role=UserRole.VIEWER,
     )
     db.add(viewer)
@@ -222,18 +222,18 @@ def test_production_configuration_rejects_placeholders_and_unsafe_docs():
         USE_SQLITE=False,
         USE_REDIS_MOCK=False,
         POSTGRES_SERVER="postgres.internal",
-        POSTGRES_PASSWORD="triageops_secret",
+        POSTGRES_PASSWORD="vigilantai_secret",
         REDIS_HOST="redis.internal",
         SECRET_KEY="a" * 48,
         JWT_SECRET_KEY="b" * 48,
         REFRESH_TOKEN_SECRET="c" * 48,
         COLLECTOR_TOKEN_SECRET="d" * 48,
         OPENAI_API_KEY="e" * 48,
-        ALLOWED_HOSTS=["triageops.example.com"],
-        BACKEND_CORS_ORIGINS=["https://triageops.example.com"],
+        ALLOWED_HOSTS=["vigilantai.example.com"],
+        BACKEND_CORS_ORIGINS=["https://vigilantai.example.com"],
         DOCS_ENABLED=False,
         SECURE_COOKIE=True,
-        FRONTEND_PUBLIC_URL="https://triageops.example.com",
+        FRONTEND_PUBLIC_URL="https://vigilantai.example.com",
         AUTH_EMAIL_CAPTURE=False,
         AUTH_DEV_EXPOSE_TOKENS=False,
     )

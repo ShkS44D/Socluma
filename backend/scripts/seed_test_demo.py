@@ -1,4 +1,4 @@
-"""Seed the deterministic, offline TriageOps demonstration dataset."""
+"""Seed the deterministic, offline VigilantAI demonstration dataset."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from src.utils.datetime_utils import get_utc_now
 
 
 DEMO_SLUG = "test-demo"
-DEMO_NAME = "TriageOps Demo"
+DEMO_NAME = "VigilantAI Demo"
 OWNER_EMAIL_DEFAULT = "demo.owner@example.com"
 ANALYST_EMAIL_DEFAULT = "demo.analyst@example.com"
 
@@ -43,7 +43,7 @@ ANALYST_EMAIL_DEFAULT = "demo.analyst@example.com"
 def _guard(confirmed: bool) -> None:
     settings = get_settings()
     if settings.ENVIRONMENT.casefold() in {"production", "prod"}:
-        raise RuntimeError("TriageOps demo seeding is disabled in production")
+        raise RuntimeError("VigilantAI demo seeding is disabled in production")
     if not confirmed:
         raise RuntimeError("Database is unconfirmed; pass --confirm-test-demo-seed")
 
@@ -63,7 +63,7 @@ def _ensure_user(db: Session, tenant: Tenant, email: str, password: str, role: U
     if not row:
         row = User(
             tenant_id=tenant.id, email=email, hashed_password=get_password_hash(password),
-            full_name=f"TriageOps Demo {org_role.value.replace('_', ' ').title()}", role=role,
+            full_name=f"VigilantAI Demo {org_role.value.replace('_', ' ').title()}", role=role,
             is_active=True, email_verified_at=get_utc_now(), email_verification_exempt=True,
         )
         db.add(row); db.flush()
@@ -136,7 +136,7 @@ def _ensure_attack_story(db: Session, tenant: Tenant, owner: User, collector: Co
 
     mitre_technique_service.bootstrap_catalog(db, ["T1110", "T1059", "T1059.001", "T1071"])
     source, _ = _get_or_create(
-        db, AlertSource, tenant_id=tenant.id, name="TriageOps Demo EDR",
+        db, AlertSource, tenant_id=tenant.id, name="VigilantAI Demo EDR",
         defaults={"type": AlertSourceType.API, "enabled": True, "is_active": True},
     )
     specs = [
@@ -166,7 +166,7 @@ def _ensure_attack_story(db: Session, tenant: Tenant, owner: User, collector: Co
             ocsf_data={**evidence, "attack_techniques": [technique]}, raw_data=evidence,
             risk_score=90 if severity == Severity.CRITICAL else 75, severity=severity,
             status=AlertStatus.OPEN, matched_condition=f"Controlled {rule_name.casefold()} signature matched",
-            why_matched=f"Event matched {rule.name}; evidence is synthetic and scoped to the TriageOps demo.",
+            why_matched=f"Event matched {rule.name}; evidence is synthetic and scoped to the VigilantAI demo.",
             created_at=timestamp,
         )
         db.add(alert); db.flush()
@@ -208,10 +208,10 @@ def _ensure_iocs(db: Session, tenant: Tenant, owner: User):
         ).first()
         if not row:
             row = ioc_service.create_ioc(db, tenant.id, owner.id, IOCCreate(
-                type=ioc_type, value=value, description="Synthetic TriageOps demonstration indicator.",
+                type=ioc_type, value=value, description="Synthetic VigilantAI demonstration indicator.",
                 source="test-controlled-offline", severity=severity, confidence_score=confidence,
                 source_reliability=reliability, lifecycle_status=lifecycle, tlp=tlp,
-                source_references=["urn:triageops:demo"], classification="controlled-demo",
+                source_references=["urn:vigilantai:demo"], classification="controlled-demo",
                 tags=["synthetic-demo", "synthetic"],
             ))
         row.enrichment_status = "completed_offline"
@@ -234,7 +234,7 @@ def seed(*, confirmed: bool, owner_password: str, analyst_password: str,
         if target_tenant_slug == DEMO_SLUG:
             tenant, created = _get_or_create(
                 db, Tenant, slug=DEMO_SLUG,
-                defaults={"name": DEMO_NAME, "description": "Synthetic, isolated TriageOps demonstration dataset.",
+                defaults={"name": DEMO_NAME, "description": "Synthetic, isolated VigilantAI demonstration dataset.",
                           "industry": "Technology", "country": "Demo", "timezone": "UTC",
                           "sensitive_action_approval_mode": "one_person"},
             )
@@ -368,7 +368,7 @@ def main() -> int:
         analyst_password=os.getenv("TEST_DEMO_ANALYST_PASSWORD", ""),
         owner_email=args.owner_email, analyst_email=args.analyst_email,
     )
-    print(f"TriageOps demo ready for tenant {result['tenant_id']}")
+    print(f"VigilantAI demo ready for tenant {result['tenant_id']}")
     print(f"Owner account: {result['owner_email']} (password supplied via TEST_DEMO_OWNER_PASSWORD)")
     print(f"Analyst account: {result['analyst_email']} (password supplied via TEST_DEMO_ANALYST_PASSWORD)")
     print(f"Incident: {result['incident_id']} | Report: {result['report_id']}")

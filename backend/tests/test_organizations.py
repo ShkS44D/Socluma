@@ -77,7 +77,7 @@ class OrganizationTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=email,
-            hashed_password=get_password_hash("TriageOps-Test-Passphrase-2026!"),
+            hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
             full_name=email.split("@")[0],
             role=role,
         )

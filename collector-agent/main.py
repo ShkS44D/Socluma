@@ -1,7 +1,7 @@
 import sys
 from config import Config
-from api_client import TriageOpsAPIClient
-from collector import TriageOpsCollector
+from api_client import VigilantAIAPIClient
+from collector import VigilantAICollector
 from utils.logger import setup_logger
 
 logger = setup_logger("main")
@@ -15,10 +15,10 @@ def main():
     logger.info("Configuration loaded successfully")
     
     # Initialize API client
-    api_client = TriageOpsAPIClient(Config)
+    api_client = VigilantAIAPIClient(Config)
     
     # Initialize and start collector
-    collector = TriageOpsCollector(api_client, Config.HEARTBEAT_INTERVAL_SECONDS, Config.EVENT_POLL_INTERVAL_SECONDS)
+    collector = VigilantAICollector(api_client, Config.HEARTBEAT_INTERVAL_SECONDS, Config.EVENT_POLL_INTERVAL_SECONDS)
     
     try:
         collector.start()

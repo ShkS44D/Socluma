@@ -8,7 +8,7 @@ test('real event-to-correlated-incident-to-MITRE-matrix lifecycle', async ({ pag
   test.skip(process.env.E2E_REAL_LIFECYCLE !== '1', 'Set E2E_REAL_LIFECYCLE=1 for the isolated real API lifecycle')
   const assertNoFailures = monitorRuntime(page)
   await login(page)
-  const accessToken = await page.evaluate(() => localStorage.getItem('triageops.auth.accessToken'))
+  const accessToken = await page.evaluate(() => localStorage.getItem('vigilantai.auth.accessToken'))
   expect(accessToken).toBeTruthy()
   const headers = { Authorization: `Bearer ${accessToken}` }
 

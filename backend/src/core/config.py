@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "TriageOps"
+    PROJECT_NAME: str = "VigilantAI"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
@@ -29,9 +29,9 @@ class Settings(BaseSettings):
     
     # Database
     POSTGRES_SERVER: str = "db"
-    POSTGRES_USER: str = "triageops"
-    POSTGRES_PASSWORD: str = "triageops_secret"
-    POSTGRES_DB: str = "triageops"
+    POSTGRES_USER: str = "vigilantai"
+    POSTGRES_PASSWORD: str = "vigilantai_secret"
+    POSTGRES_DB: str = "vigilantai"
     USE_SQLITE: bool = True
     DATABASE_URL_OVERRIDE: Optional[str] = None
     
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         if self.DATABASE_URL_OVERRIDE:
             return self.DATABASE_URL_OVERRIDE
         if self.USE_SQLITE:
-            return "sqlite:///./triageops.db"
+            return "sqlite:///./vigilantai.db"
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:5432/{self.POSTGRES_DB}"
     
     # Redis
@@ -59,14 +59,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
-    JWT_ISSUER: str = "triageops"
+    JWT_ISSUER: str = "vigilantai"
     COLLECTOR_TOKEN_SECRET: Optional[str] = None
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_MINUTES: int = 15
     PASSWORD_MIN_LENGTH: int = 12
     PASSWORD_MAX_LENGTH: int = 128
     PASSWORD_BCRYPT_ROUNDS: int = 12
-    MFA_ISSUER: str = "TriageOps"
+    MFA_ISSUER: str = "VigilantAI"
     MFA_CHALLENGE_MINUTES: int = 5
     MFA_ENROLLMENT_MINUTES: int = 10
     MFA_FAILURE_LIMIT: int = 5
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     SECURE_COOKIE: bool = False
     COOKIE_SAMESITE: str = "lax"
     FRONTEND_PUBLIC_URL: str = "http://localhost:3000"
-    AUTH_EMAIL_FROM: str = "security@triageops.local"
+    AUTH_EMAIL_FROM: str = "security@vigilantai.local"
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
@@ -348,8 +348,8 @@ class Settings(BaseSettings):
             raise RuntimeError("Password length configuration is invalid")
         if self.PASSWORD_BCRYPT_ROUNDS < 10 or self.PASSWORD_BCRYPT_ROUNDS > 15:
             raise RuntimeError("PASSWORD_BCRYPT_ROUNDS must be between 10 and 15")
-        if self.MFA_ISSUER != "TriageOps":
-            raise RuntimeError("MFA_ISSUER must be TriageOps")
+        if self.MFA_ISSUER != "VigilantAI":
+            raise RuntimeError("MFA_ISSUER must be VigilantAI")
         if self.MFA_CHALLENGE_MINUTES < 1 or self.MFA_CHALLENGE_MINUTES > 10:
             raise RuntimeError("MFA_CHALLENGE_MINUTES must be between 1 and 10")
         if self.MFA_FAILURE_LIMIT < 3 or self.MFA_LOCKOUT_MINUTES < 1:
@@ -501,7 +501,7 @@ class Settings(BaseSettings):
             None,
             "",
             "your-secret-key-here-change-in-production",
-            "triageops_dev_secret_change_me",
+            "vigilantai_dev_secret_change_me",
             "collector-secret-key-here-change-in-production",
         }
         required = {
@@ -514,11 +514,12 @@ class Settings(BaseSettings):
                 if self.AUDIT_INTEGRITY_KEYS_JSON else self.AUDIT_INTEGRITY_KEY
             ),
         }
-        invalid = [
-            name
-            for name, value in required.items()
-            if value in weak_values or value is None or len(value) < 32
-        ]
+        invalid = []
+        for name, value in required.items():
+            normalized = value.strip().lower() if isinstance(value, str) else ""
+            is_development_placeholder = "_dev_" in normalized and normalized.endswith("_change_me")
+            if value in weak_values or value is None or len(value) < 32 or is_development_placeholder:
+                invalid.append(name)
         if invalid:
             raise RuntimeError(
                 "Production startup blocked: configure strong secrets for "
@@ -541,13 +542,17 @@ class Settings(BaseSettings):
             raise RuntimeError("Production startup blocked: USE_REDIS_MOCK must be false")
         if self.SYSLOG_UDP_ENABLED:
             raise RuntimeError("Production startup blocked: public UDP Syslog is not enabled by default")
-        placeholder_values = {"change-me", "changeme", "password", "secret", "triageops_secret"}
+        placeholder_values = {"change-me", "changeme", "password", "secret", "vigilantai_secret"}
         database_password = (
             urlparse(self.DATABASE_URL_OVERRIDE).password
             if self.DATABASE_URL_OVERRIDE
             else self.POSTGRES_PASSWORD
         )
-        if not database_password or database_password.lower() in placeholder_values:
+        if (
+            not database_password
+            or database_password.lower() in placeholder_values
+            or database_password.lower().endswith("_secret")
+        ):
             raise RuntimeError("Production startup blocked: POSTGRES_PASSWORD is a known placeholder")
         if self.REDIS_HOST.lower() in {"", "localhost", "127.0.0.1"}:
             raise RuntimeError("Production startup blocked: configure a production Redis service")

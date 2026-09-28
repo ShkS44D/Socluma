@@ -1,7 +1,7 @@
 import platform
 import time
 from typing import List, Dict, Any
-from api_client import TriageOpsAPIClient
+from api_client import VigilantAIAPIClient
 from event_collector import WindowsEventCollector, LinuxEventCollector
 from heartbeat import HeartbeatService
 from utils.logger import setup_logger
@@ -10,8 +10,8 @@ from state import AtomicCheckpointStore
 
 logger = setup_logger("collector")
 
-class TriageOpsCollector:
-    def __init__(self, api_client: TriageOpsAPIClient, heartbeat_interval: int = 60, event_poll_interval: float = 2.0):
+class VigilantAICollector:
+    def __init__(self, api_client: VigilantAIAPIClient, heartbeat_interval: int = 60, event_poll_interval: float = 2.0):
         self.api_client = api_client
         self.spool = DurableEventSpool(api_client.config.SPOOL_PATH, api_client.config.SPOOL_MAX_BYTES)
         self.checkpoints = AtomicCheckpointStore(api_client.config.CHECKPOINT_PATH)
@@ -31,7 +31,7 @@ class TriageOpsCollector:
     
     def start(self):
         logger.info(
-            "Starting TriageOps collector (backend=%s collector_id=%s channels=%s)",
+            "Starting VigilantAI collector (backend=%s collector_id=%s channels=%s)",
             self.api_client.base_url,
             self.api_client.config.COLLECTOR_ID,
             ",".join(getattr(self.event_collector, "channels", [])) or "platform-default",
@@ -46,7 +46,7 @@ class TriageOpsCollector:
             self.stop()
     
     def stop(self):
-        logger.info("Stopping TriageOps collector...")
+        logger.info("Stopping VigilantAI collector...")
         self.heartbeat_service.stop()
         self.api_client.close()
         self.spool.close()

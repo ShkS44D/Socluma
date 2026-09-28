@@ -83,7 +83,7 @@ def _get_handlers(formatter: logging.Formatter) -> tuple[logging.Handler, loggin
         return _SHARED_CONSOLE_HANDLER, _SHARED_FILE_HANDLER
 
 
-def setup_logger(name: str = "triageops_collector") -> logging.Logger:
+def setup_logger(name: str = "vigilantai_collector") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     logger.propagate = False

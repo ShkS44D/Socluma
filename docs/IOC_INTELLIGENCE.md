@@ -1,6 +1,6 @@
 # IOC Intelligence (Phases 7.5 and 7.6)
 
-TriageOps keeps IOC intelligence tenant-scoped. An IOC is identified by organization, type, and
+VigilantAI keeps IOC intelligence tenant-scoped. An IOC is identified by organization, type, and
 canonical normalized value. Original input is retained for provenance; matching uses only the
 canonical value and content hash.
 

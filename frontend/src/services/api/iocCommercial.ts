@@ -204,7 +204,7 @@ const safeReportFilename = (contentDisposition: string | undefined, fallback: st
 }
 
 export const downloadIOCReport = async (job: Pick<CommercialJob, 'id' | 'format'>): Promise<DownloadedIOCReport> => {
-  const fallback = `triageops-ioc-report-${job.id}.${job.format || 'bin'}`
+  const fallback = `vigilantai-ioc-report-${job.id}.${job.format || 'bin'}`
   const response = await api.get<Blob>(`${root}/reports/${job.id}/download`, { responseType: 'blob' })
   const contentType = String(response.headers['content-type'] || response.data.type || 'application/octet-stream')
   return {

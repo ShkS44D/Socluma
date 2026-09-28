@@ -7,7 +7,7 @@ test('saved USB Sigma rule is immediately available in the structured rule teste
   test.skip(process.env.E2E_SIGMA_RULE_TESTER !== '1', 'Set E2E_SIGMA_RULE_TESTER=1 for real rule tester coverage')
   const assertNoFailures = monitorRuntime(page)
   await login(page)
-  const accessToken = await page.evaluate(() => localStorage.getItem('triageops.auth.accessToken'))
+  const accessToken = await page.evaluate(() => localStorage.getItem('vigilantai.auth.accessToken'))
   const headers = { Authorization: `Bearer ${accessToken}` }
   const uniqueName = `USB Storage E2E ${Date.now()}`
 

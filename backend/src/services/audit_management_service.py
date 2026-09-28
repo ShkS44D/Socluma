@@ -280,7 +280,7 @@ class AuditManagementService:
         content = ("\n".join(lines) + "\n").encode()
         content_checksum = hashlib.sha256(content).hexdigest()
         manifest = {
-            "format": "triageops-audit-jsonl-v1", "tenant_id": tenant_id,
+            "format": "vigilantai-audit-jsonl-v1", "tenant_id": tenant_id,
             "created_at": get_utc_now().isoformat(), "record_count": len(rows),
             "first_sequence": rows[0].sequence_number, "last_sequence": rows[-1].sequence_number,
             "content_sha256": content_checksum, "archive_retention_days": policy.archive_retention_days,
@@ -361,7 +361,7 @@ class AuditManagementService:
         data = ("\n".join(json.dumps(row, sort_keys=True, separators=(",", ":")) for row in records) + "\n").encode()
         verification = audit_service.verify(db, job.tenant_id)
         manifest = {
-            "format": "triageops-evidence-package-v1", "record_count": len(records),
+            "format": "vigilantai-evidence-package-v1", "record_count": len(records),
             "created_at": get_utc_now().isoformat(), "audit_sha256": hashlib.sha256(data).hexdigest(),
             "integrity": verification,
         }

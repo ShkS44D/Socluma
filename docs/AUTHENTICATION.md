@@ -1,10 +1,10 @@
-# TriageOps Authentication Architecture
+# VigilantAI Authentication Architecture
 
 ## Design
 
 Interactive users authenticate with a short-lived JWT access token and an opaque refresh token. Only an HMAC hash of each refresh token is stored. Refresh tokens rotate on use and belong to a database-backed session/family. Reuse of a rotated token revokes that family. Individual revocation and logout-all invalidate the session and its complete refresh chain. Collector bearer authentication remains separate and does not use interactive MFA.
 
-TOTP follows the standard 30-second, six-digit SHA-1 profile used by common authenticator apps, with issuer `TriageOps` and a one-step clock tolerance. Secrets are encrypted using the application encryption service. Enrollment secrets expire and become active only after confirmation. The last accepted time step prevents replay. Recovery codes are random, displayed once, HMAC-hashed at rest, and consumed once.
+TOTP follows the standard 30-second, six-digit SHA-1 profile used by common authenticator apps, with issuer `VigilantAI` and a one-step clock tolerance. Secrets are encrypted using the application encryption service. Enrollment secrets expire and become active only after confirmation. The last accepted time step prevents replay. Recovery codes are random, displayed once, HMAC-hashed at rest, and consumed once.
 
 Email-verification and password-reset links contain random, expiring, single-use values. Only HMAC hashes are stored. Request endpoints give generic responses. Existing users are migration-exempt from mandatory verification so enabling the production requirement does not unexpectedly lock them out.
 

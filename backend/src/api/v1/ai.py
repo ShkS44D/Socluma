@@ -27,7 +27,7 @@ from src.services.ai_investigation_service import (
 from src.services.audit_service import audit_service
 
 
-router = APIRouter(prefix="/ai", tags=["Triage AI"])
+router = APIRouter(prefix="/ai", tags=["VigilantAI Copilot"])
 
 
 def _client_ip(request: Request) -> str | None:

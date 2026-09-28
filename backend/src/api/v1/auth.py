@@ -388,7 +388,7 @@ def change_password(
         details={"revoked_sessions": revoked_count},
     )
     auth_email_service.security_notice(
-        current_user.email, "Password changed", "Your TriageOps password was changed.",
+        current_user.email, "Password changed", "Your VigilantAI password was changed.",
     )
     return MessageResponse(detail="Password changed successfully")
 

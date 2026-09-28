@@ -2,15 +2,15 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: triageops_acceptance
+      POSTGRES_USER: vigilantai_acceptance
       POSTGRES_PASSWORD: ${ACCEPTANCE_POSTGRES_PASSWORD:?set ACCEPTANCE_POSTGRES_PASSWORD}
-      POSTGRES_DB: triageops_acceptance
+      POSTGRES_DB: vigilantai_acceptance
     volumes:
       - acceptance_postgres_data:/var/lib/postgresql/data
     ports:
       - "${ACCEPTANCE_POSTGRES_PORT:?set ACCEPTANCE_POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U triageops_acceptance -d triageops_acceptance"]
+      test: ["CMD-SHELL", "pg_isready -U vigilantai_acceptance -d vigilantai_acceptance"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -35,9 +35,9 @@ services:
       ENVIRONMENT: development
       USE_SQLITE: "false"
       POSTGRES_SERVER: db
-      POSTGRES_USER: triageops_acceptance
+      POSTGRES_USER: vigilantai_acceptance
       POSTGRES_PASSWORD: ${ACCEPTANCE_POSTGRES_PASSWORD:?set ACCEPTANCE_POSTGRES_PASSWORD}
-      POSTGRES_DB: triageops_acceptance
+      POSTGRES_DB: vigilantai_acceptance
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       USE_REDIS_MOCK: "false"

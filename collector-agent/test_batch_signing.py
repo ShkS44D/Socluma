@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from api_client import TriageOpsAPIClient
+from api_client import VigilantAIAPIClient
 from src.models.pydantic import IngestionBatchRequest
 
 
@@ -21,7 +21,7 @@ def test_collector_and_backend_use_the_same_canonical_batch():
             "timestamp": "2026-07-29T06:07:45.204461+00:00",
         }],
     }
-    collector_payload = TriageOpsAPIClient._canonical_batch_payload(wire_payload)
+    collector_payload = VigilantAIAPIClient._canonical_batch_payload(wire_payload)
     backend_payload = IngestionBatchRequest.model_validate(wire_payload).model_dump(
         mode="json", exclude_unset=True
     )

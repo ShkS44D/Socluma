@@ -11,8 +11,8 @@ This record covers Incident Intelligence release-candidate validation only. It d
 - Host: AMD Ryzen 7 5700U, 8 cores / 16 logical processors, 15.33 GiB RAM.
 - Docker Desktop: 29.6.1, allocated 16 CPUs and approximately 7.42 GiB RAM.
 - PostgreSQL: 16.14 in Docker.
-- Validation database: dedicated `triageops_batch63_validation` database, with a unique temporary schema per run. Every schema was dropped after its run.
-- Dataset per run: 100 incidents across 2 tenants and 4 users; 120 alerts; 120 events; one incident with 100 related events and 100 related alerts; another with 20 related alerts/events; 50 entities/evidence records; 10 Triage AI conversations with 100 seeded messages; and 10 IOCs.
+- Validation database: dedicated `vigilantai_batch63_validation` database, with a unique temporary schema per run. Every schema was dropped after its run.
+- Dataset per run: 100 incidents across 2 tenants and 4 users; 120 alerts; 120 events; one incident with 100 related events and 100 related alerts; another with 20 related alerts/events; 50 entities/evidence records; 10 VigilantAI Copilot conversations with 100 seeded messages; and 10 IOCs.
 - Provenance represented: manual, legacy-derived, Playbook-created, detection-created, and correlated incidents.
 
 ## PostgreSQL Concurrency Results
@@ -32,7 +32,7 @@ Process RSS was not available because `psutil` was not installed. Python allocat
 
 The increasing tail latency at 8 and 16 clients is a local-capacity signal. These measurements validate correctness under controlled concurrency, not production sizing or enterprise throughput.
 
-## Triage AI Idempotency
+## VigilantAI Copilot Idempotency
 
 Redis-backed and Redis-unavailable local fallback paths were tested at 2, 4, 8, and 16 concurrent callers. In every case:
 
@@ -48,12 +48,12 @@ Redis-backed and Redis-unavailable local fallback paths were tested at 2, 4, 8, 
 
 One controlled live Gemini request was made. Gemini returned HTTP 429 `RESOURCE_EXHAUSTED`, categorized as `quota_exhausted`, because the configured account had no available prepaid credits. No automatic retry was attempted.
 
-Live Gemini grounding evaluation is blocked, not passed. The deterministic Triage AI path remains verified: the endpoint returns HTTP 200, marks `fallback_used=true`, identifies the deterministic provider, and includes non-empty references to real tenant-scoped evidence.
+Live Gemini grounding evaluation is blocked, not passed. The deterministic VigilantAI Copilot path remains verified: the endpoint returns HTTP 200, marks `fallback_used=true`, identifies the deterministic provider, and includes non-empty references to real tenant-scoped evidence.
 
 ## Browser And Docker
 
 - Cold frontend-only recreation completed without touching PostgreSQL or Redis data volumes.
-- Host and container hashes matched for Incident Detail, Triage AI, and Vite configuration.
+- Host and container hashes matched for Incident Detail, VigilantAI Copilot, and Vite configuration.
 - Port 3000 served the current source, including conversation restoration, server-authoritative evidence navigation, and the pending-request guard.
 - Full Playwright result: 16 passed, 0 failed, 0 skipped.
 - Development backend, PostgreSQL, Redis, and frontend containers were healthy; the Celery worker responded to inspection ping.

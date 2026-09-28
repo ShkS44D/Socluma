@@ -1,8 +1,8 @@
 
-# TriageOps Backend Startup Script
+# VigilantAI Backend Startup Script
 # Ensures backend always starts on port 8001 by cleaning up any existing process first
 
-Write-Host "=== TriageOps Backend Startup ===" -ForegroundColor Cyan
+Write-Host "=== VigilantAI Backend Startup ===" -ForegroundColor Cyan
 
 $PORT = 8001
 

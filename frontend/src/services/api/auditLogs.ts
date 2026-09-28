@@ -47,5 +47,5 @@ export const downloadAuditExport = async (job:AuditExportJob, token:string) => {
   const response = await api.get(`/api/v1/audit-logs/exports/${job.id}/download`, {params:{token},responseType:'blob'})
   const extension=job.format==='evidence_zip'?'zip':job.format
   const url=URL.createObjectURL(response.data); const link=document.createElement('a')
-  link.href=url; link.download=`triageops-audit-${job.id}.${extension}`; link.click(); URL.revokeObjectURL(url)
+  link.href=url; link.download=`vigilantai-audit-${job.id}.${extension}`; link.click(); URL.revokeObjectURL(url)
 }

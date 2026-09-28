@@ -8,187 +8,187 @@ from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTEN
 
 
 API_REQUEST_LATENCY = Histogram(
-    "triageops_api_request_duration_seconds",
+    "vigilantai_api_request_duration_seconds",
     "HTTP API request latency.",
     ["method", "endpoint", "status_code"],
 )
 API_REQUESTS = Counter(
-    "triageops_api_requests_total",
+    "vigilantai_api_requests_total",
     "HTTP API requests.",
     ["method", "endpoint", "status_code"],
 )
 AUTH_ATTEMPTS = Counter(
-    "triageops_auth_attempts_total",
+    "vigilantai_auth_attempts_total",
     "Authentication attempts.",
     ["outcome"],
 )
 COLLECTOR_HEARTBEATS = Counter(
-    "triageops_collector_heartbeats_total",
+    "vigilantai_collector_heartbeats_total",
     "Collector heartbeat submissions.",
     ["status"],
 )
 COLLECTOR_EVENTS = Counter(
-    "triageops_collector_events_total",
+    "vigilantai_collector_events_total",
     "Collector event ingestion submissions.",
     ["source"],
 )
 INGESTION_BATCHES = Counter(
-    "triageops_ingestion_batches_total",
+    "vigilantai_ingestion_batches_total",
     "Telemetry batch outcomes.",
     ["outcome"],
 )
 INGESTION_EVENT_OUTCOMES = Counter(
-    "triageops_ingestion_event_outcomes_total",
+    "vigilantai_ingestion_event_outcomes_total",
     "Per-event telemetry ingestion outcomes.",
     ["outcome"],
 )
 INGESTION_BATCH_SIZE = Histogram(
-    "triageops_ingestion_batch_size",
+    "vigilantai_ingestion_batch_size",
     "Events submitted per telemetry batch.",
 )
 INGESTION_QUALITY = Histogram(
-    "triageops_ingestion_quality_score",
+    "vigilantai_ingestion_quality_score",
     "Normalized telemetry data quality score.",
     buckets=(0, 25, 50, 75, 90, 100),
 )
 INGESTION_LAG = Histogram(
-    "triageops_ingestion_lag_seconds",
+    "vigilantai_ingestion_lag_seconds",
     "Telemetry event-time to receive-time lag.",
 )
 INGESTION_DEAD_LETTER = Counter(
-    "triageops_ingestion_dead_letter_total",
+    "vigilantai_ingestion_dead_letter_total",
     "Telemetry records moved to dead-letter state.",
     ["stage", "error_code"],
 )
 DETECTION_EXECUTIONS = Counter(
-    "triageops_detection_executions_total",
+    "vigilantai_detection_executions_total",
     "Detection engine executions.",
     ["outcome"],
 )
 DETECTION_LATENCY = Histogram(
-    "triageops_detection_duration_seconds",
+    "vigilantai_detection_duration_seconds",
     "Detection engine execution time.",
 )
 ALERTS_CREATED = Counter(
-    "triageops_alerts_created_total",
+    "vigilantai_alerts_created_total",
     "Alerts created.",
     ["source"],
 )
 INCIDENTS_CREATED = Counter(
-    "triageops_incidents_created_total",
+    "vigilantai_incidents_created_total",
     "Incidents created.",
     ["source"],
 )
 WEBSOCKET_CONNECTIONS = Gauge(
-    "triageops_websocket_connections",
+    "vigilantai_websocket_connections",
     "Active WebSocket connections.",
 )
 WEBSOCKET_EVENTS = Counter(
-    "triageops_websocket_events_total",
+    "vigilantai_websocket_events_total",
     "WebSocket connection lifecycle and broadcast events.",
     ["event"],
 )
 REDIS_STATUS = Gauge(
-    "triageops_redis_up",
+    "vigilantai_redis_up",
     "Redis health status, 1 for up and 0 for down.",
 )
 DATABASE_STATUS = Gauge(
-    "triageops_database_up",
+    "vigilantai_database_up",
     "Database health status, 1 for up and 0 for down.",
 )
 DATABASE_LATENCY = Histogram(
-    "triageops_database_latency_seconds",
+    "vigilantai_database_latency_seconds",
     "Database health probe latency.",
     ["operation"],
 )
 QUEUE_LATENCY = Histogram(
-    "triageops_queue_latency_seconds",
+    "vigilantai_queue_latency_seconds",
     "Background queue health probe latency.",
     ["operation"],
 )
 WORKER_EXECUTION_TIME = Histogram(
-    "triageops_worker_execution_duration_seconds",
+    "vigilantai_worker_execution_duration_seconds",
     "Background worker task execution time.",
     ["task", "outcome"],
 )
 CONNECTOR_EXECUTIONS = Counter(
-    "triageops_connector_executions_total",
+    "vigilantai_connector_executions_total",
     "SOAR connector executions.",
     ["connector_type", "status"],
 )
 CONNECTOR_FAILURES = Counter(
-    "triageops_connector_failures_total",
+    "vigilantai_connector_failures_total",
     "SOAR connector failures.",
     ["connector_type", "reason"],
 )
 CONNECTOR_RETRIES = Counter(
-    "triageops_connector_retries_total",
+    "vigilantai_connector_retries_total",
     "SOAR connector retries.",
     ["connector_type"],
 )
 CONNECTOR_TIMEOUTS = Counter(
-    "triageops_connector_timeouts_total",
+    "vigilantai_connector_timeouts_total",
     "SOAR connector timeouts.",
     ["connector_type"],
 )
 CONNECTOR_EXECUTION_DURATION = Histogram(
-    "triageops_connector_execution_duration_seconds",
+    "vigilantai_connector_execution_duration_seconds",
     "SOAR connector execution duration.",
     ["connector_type", "status"],
 )
 CONNECTOR_APPROVAL_LATENCY = Histogram(
-    "triageops_connector_approval_latency_seconds",
+    "vigilantai_connector_approval_latency_seconds",
     "SOAR action approval latency.",
     ["status"],
 )
 INCIDENT_EXPLANATIONS = Counter(
-    "triageops_incident_explanations_total",
+    "vigilantai_incident_explanations_total",
     "Deterministic incident explanations generated.",
     ["outcome"],
 )
 COPILOT_REQUESTS = Counter(
-    "triageops_copilot_requests_total",
-    "Triage AI incident requests.",
+    "vigilantai_copilot_requests_total",
+    "VigilantAI Copilot incident requests.",
     ["provider", "outcome"],
 )
 COPILOT_RESPONSE_LATENCY = Histogram(
-    "triageops_copilot_response_duration_seconds",
-    "Triage AI incident response latency.",
+    "vigilantai_copilot_response_duration_seconds",
+    "VigilantAI Copilot incident response latency.",
     ["provider", "fallback_used"],
 )
 COPILOT_PROVIDER_FAILURES = Counter(
-    "triageops_copilot_provider_failures_total",
-    "External Triage AI provider failures.",
+    "vigilantai_copilot_provider_failures_total",
+    "External VigilantAI Copilot provider failures.",
     ["provider"],
 )
 COPILOT_FALLBACK_USAGE = Counter(
-    "triageops_copilot_fallback_total",
-    "Deterministic Triage AI fallback usage.",
+    "vigilantai_copilot_fallback_total",
+    "Deterministic VigilantAI Copilot fallback usage.",
     ["reason"],
 )
 COPILOT_EVIDENCE_REFERENCES = Histogram(
-    "triageops_copilot_evidence_references",
-    "Evidence references returned per Triage AI response.",
+    "vigilantai_copilot_evidence_references",
+    "Evidence references returned per VigilantAI Copilot response.",
 )
 COPILOT_TOKENS = Counter(
-    "triageops_copilot_tokens_total",
-    "OpenAI token usage for Triage AI by normalized category.",
+    "vigilantai_copilot_tokens_total",
+    "OpenAI token usage for VigilantAI Copilot by normalized category.",
     ["provider", "type"],
 )
 COPILOT_CONVERSATIONS = Counter(
-    "triageops_copilot_conversations_total",
-    "Triage AI incident conversations created.",
+    "vigilantai_copilot_conversations_total",
+    "VigilantAI Copilot incident conversations created.",
 )
 INCIDENT_CORRELATION_CONFIDENCE = Histogram(
-    "triageops_incident_correlation_confidence",
+    "vigilantai_incident_correlation_confidence",
     "Stored incident correlation confidence score.",
 )
 INCIDENT_SOURCE_ALERTS = Histogram(
-    "triageops_incident_source_alerts",
+    "vigilantai_incident_source_alerts",
     "Source alerts represented in an incident explanation.",
 )
 INCIDENT_SOURCE_EVENTS = Histogram(
-    "triageops_incident_source_events",
+    "vigilantai_incident_source_events",
     "Source events represented in an incident explanation.",
 )
 

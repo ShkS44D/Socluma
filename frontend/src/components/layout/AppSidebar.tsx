@@ -35,7 +35,7 @@ const SidebarContent: React.FC<{ items: NavigationItem[] }> = ({ items }) => {
     <Box sx={{ height: '100%', px: 1.5 }}>
       <Toolbar sx={{ px: 1 }}>
         <Box>
-          <Typography variant="h6">TriageOps</Typography>
+          <Typography variant="h6">VigilantAI</Typography>
           <Typography variant="caption" color="text.secondary">
             SOC Operations Console
           </Typography>

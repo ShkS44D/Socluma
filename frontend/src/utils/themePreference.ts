@@ -1,7 +1,7 @@
 export type ThemePreference = 'dark' | 'light' | 'system'
 
-export const THEME_PREFERENCE_KEY = 'triageops-theme-preference'
-export const THEME_PREFERENCE_EVENT = 'triageops-theme-preference-changed'
+export const THEME_PREFERENCE_KEY = 'vigilantai-theme-preference'
+export const THEME_PREFERENCE_EVENT = 'vigilantai-theme-preference-changed'
 
 export const getStoredThemePreference = (): ThemePreference => {
   const stored = window.localStorage.getItem(THEME_PREFERENCE_KEY)

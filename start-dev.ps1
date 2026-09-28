@@ -1,9 +1,9 @@
 
-# TriageOps Full Development Environment Startup Script
+# VigilantAI Full Development Environment Startup Script
 # Starts backend (port 8001), then frontend (port 3000)
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  TriageOps Development Environment" -ForegroundColor Cyan
+Write-Host "  VigilantAI Development Environment" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 

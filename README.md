@@ -1,10 +1,10 @@
-# TriageOps
+# VigilantAI
 
-TriageOps is an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
+VigilantAI is an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
 
 The repository contains a FastAPI backend, a React analyst console, a Python collector agent, database migrations, background workers, and Docker configurations for development and production-style deployments.
 
-> **Project status:** TriageOps is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
+> **Project status:** VigilantAI is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
 
 ## Core capabilities
 
@@ -59,7 +59,7 @@ Docker is the easiest way to run the complete application.
 
    ```powershell
    git clone <private-repository-url>
-   Set-Location TriageOps
+   Set-Location VigilantAI
    ```
 
 2. Create local environment files:
@@ -129,7 +129,7 @@ If PowerShell blocks virtual-environment activation, run the following once for 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-The default local database is `backend/triageops.db`. It is runtime data and is excluded from Git.
+The default local database is `backend/vigilantai.db`. It is runtime data and is excluded from Git.
 
 ### 2. Frontend
 
@@ -157,7 +157,7 @@ Set `USE_REDIS_MOCK=false` and configure `REDIS_HOST` and `REDIS_PORT` first.
 
 ## Collector agent
 
-Create a collector in TriageOps and securely retain the returned collector ID and one-time token. Then run:
+Create a collector in VigilantAI and securely retain the returned collector ID and one-time token. Then run:
 
 ```powershell
 Set-Location collector-agent
@@ -266,9 +266,9 @@ The production Compose configuration uses PostgreSQL, Redis, a backend worker, n
 Set strong, unique values in the deployment environment:
 
 ```powershell
-$env:POSTGRES_USER="triageops"
+$env:POSTGRES_USER="vigilantai"
 $env:POSTGRES_PASSWORD="<strong-database-password>"
-$env:POSTGRES_DB="triageops"
+$env:POSTGRES_DB="vigilantai"
 $env:SECRET_KEY="<strong-random-secret>"
 $env:JWT_SECRET_KEY="<strong-random-secret>"
 $env:REFRESH_TOKEN_SECRET="<strong-random-secret>"

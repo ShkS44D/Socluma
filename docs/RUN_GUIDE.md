@@ -1,4 +1,4 @@
-# TriageOps Windows Run Guide
+# VigilantAI Windows Run Guide
 
 ## Requirements
 
@@ -64,7 +64,7 @@ docker compose -f docker\docker-compose.yml exec -T `
   backend python scripts/test_demo_smoke_test.py --base-url http://127.0.0.1:8000
 ```
 
-Reset only the reserved `TriageOps Demo` tenant and recreate its deterministic data:
+Reset only the reserved `VigilantAI Demo` tenant and recreate its deterministic data:
 
 ```powershell
 docker compose -f docker\docker-compose.yml exec -T `
@@ -90,7 +90,7 @@ Remove-Item Env:TEST_DEMO_ANALYST_PASSWORD -ErrorAction SilentlyContinue
 
 ## Windows collector
 
-Create a collector in TriageOps and store the returned one-time token in an approved local secret store. In a new PowerShell window:
+Create a collector in VigilantAI and store the returned one-time token in an approved local secret store. In a new PowerShell window:
 
 ```powershell
 Set-Location "D:\AI SOC Assistent (NL)\collector-agent"

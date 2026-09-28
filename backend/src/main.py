@@ -275,7 +275,7 @@ def custom_openapi():
         title=settings.PROJECT_NAME,
         version=settings.APP_VERSION,
         openapi_version="3.0.3",
-        description="TriageOps API",
+        description="VigilantAI API",
         routes=app.routes,
     )
     openapi_schema["components"]["securitySchemes"] = {

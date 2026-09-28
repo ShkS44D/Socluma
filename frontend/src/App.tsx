@@ -94,7 +94,7 @@ function App() {
       setThemePreference(customEvent.detail || getStoredThemePreference())
     }
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'triageops-theme-preference') {
+      if (event.key === 'vigilantai-theme-preference') {
         setThemePreference(getStoredThemePreference())
       }
     }

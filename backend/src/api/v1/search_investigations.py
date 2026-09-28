@@ -299,7 +299,7 @@ def download_export(job_id: str, db: Session = Depends(get_db), user: User = Dep
         raise HTTPException(status_code=410 if code == "EXPORT_EXPIRED" else 409, detail={"error_code": code, "message": code.replace("_", " ").title()}) from exc
     audit_service.record(db, action="search_export_downloaded", user=user, resource_type="search_export", resource_id=job.id, details={"checksum": job.checksum})
     media = {"csv": "text/csv", "jsonl": "application/x-ndjson", "markdown": "text/markdown", "evidence_zip": "application/zip"}[job.format]
-    return Response(payload, media_type=media, headers={"Content-Disposition": f'attachment; filename="triageops-{job.id}.{job.format}"'})
+    return Response(payload, media_type=media, headers={"Content-Disposition": f'attachment; filename="vigilantai-{job.id}.{job.format}"'})
 
 
 @router.get("/entities/{entity_id}")
