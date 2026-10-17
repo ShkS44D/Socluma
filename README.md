@@ -1,10 +1,10 @@
 # Socluma — AI-Assisted Security Operations
 
-Socluma is a personal cybersecurity engineering project: an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
+Socluma brings telemetry collection, threat detection, incident investigation, and response workflows into one security operations workspace. Analysts can follow an alert back to its source events, investigate related activity, and use AI assistance grounded in the incident evidence.
 
 The repository contains a FastAPI backend, a React analyst console, a Python collector agent, database migrations, background workers, and Docker configurations for development and production-style deployments.
 
-> **Project status:** Socluma is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
+Use synthetic or approved lab data for evaluation. An operational deployment requires environment-specific security configuration, backups, monitoring, and validation of the integrations you enable.
 
 ## Core capabilities
 
@@ -295,14 +295,13 @@ Backend logs use structured JSON and include correlation fields such as request,
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
-- [Rename and existing-installation notes](docs/REBRANDING.md)
 - [Windows and Docker run guide](docs/RUN_GUIDE.md)
 - [Authentication](docs/AUTHENTICATION.md)
 - [Authorization model](docs/AUTHORIZATION.md)
-- [Audit and data protection](docs/PHASE4_AUDIT_DATA_PROTECTION.md)
-- [Telemetry ingestion](docs/PHASE5_TELEMETRY_INGESTION.md)
-- [Search and investigations](docs/PHASE6_SEARCH_INVESTIGATIONS.md)
-- [Detection engineering](docs/PHASE7_DETECTION_ENGINEERING.md)
+- [Audit and data protection](docs/AUDIT_DATA_PROTECTION.md)
+- [Telemetry ingestion](docs/TELEMETRY_INGESTION.md)
+- [Search and investigations](docs/SEARCH_INVESTIGATIONS.md)
+- [Detection engineering](docs/DETECTION_ENGINEERING.md)
 - [IOC intelligence](docs/IOC_INTELLIGENCE.md)
 - [Incident intelligence](INCIDENT_INTELLIGENCE.md)
 - [Detection troubleshooting](DETECTION_RULE_TROUBLESHOOTING.md)

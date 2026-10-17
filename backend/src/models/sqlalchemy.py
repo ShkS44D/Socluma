@@ -2143,9 +2143,9 @@ class DetectionRule(Base):
     type = Column(Enum(RuleType), default=RuleType.CUSTOM)
     query = Column(Text, nullable=True)  # Allow null now
     sigma_rule = Column(Text, nullable=True)  # Allow null now
-    # New Phase 16 fields
+    # Detection rule metadata
     rule_type = Column(Enum(RuleType), default=RuleType.CUSTOM)
-    rule_content = Column(JSON, nullable=True)  # New field for Phase 6
+    rule_content = Column(JSON, nullable=True)
     event_type = Column(Enum(EventType), nullable=True)
     severity = Column(Enum(Severity), default=Severity.MEDIUM)
     enabled = Column(Boolean, default=True)

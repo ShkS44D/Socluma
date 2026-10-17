@@ -164,7 +164,7 @@ def _upgrade_sqlite_schema():
                 )
             )
             
-        # Upgrade detection_rules table for Phase 16
+        # Upgrade the detection rule schema
         detection_rules_columns = {column["name"] for column in inspector.get_columns("detection_rules")}
         if "rule_type" not in detection_rules_columns:
             connection.execute(text('ALTER TABLE detection_rules ADD COLUMN rule_type VARCHAR(10) DEFAULT "CUSTOM"'))

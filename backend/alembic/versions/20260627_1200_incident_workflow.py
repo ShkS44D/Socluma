@@ -1,4 +1,4 @@
-"""Phase 2 incident workflow fields
+"""incident workflow fields
 
 Revision ID: 202606271200
 Revises: 202606251800

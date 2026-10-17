@@ -1,4 +1,4 @@
-"""Phase 3: Incident priority, evidence, and source management
+"""Incident priority, evidence, and source management
 
 Revision ID: 202606271300
 Revises: 202606271200

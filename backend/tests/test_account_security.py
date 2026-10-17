@@ -24,7 +24,7 @@ PASSWORD = "Correct-Horse-Battery-Staple-2026!"
 
 
 @pytest.fixture()
-def phase2():
+def account_security():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
@@ -85,8 +85,8 @@ def _enable_mfa(client: TestClient, factory, headers: dict[str, str]):
     return setup, codes
 
 
-def test_mfa_challenge_replay_and_recovery_codes(phase2):
-    client, factory, headers = phase2
+def test_mfa_challenge_replay_and_recovery_codes(account_security):
+    client, factory, headers = account_security
     setup, recovery_codes = _enable_mfa(client, factory, headers)
     login = client.post("/api/v1/auth/login", json={"email": "security@example.com", "password": PASSWORD})
     assert login.status_code == 200
@@ -143,8 +143,8 @@ def jwt_unverified_jti(token: str) -> str:
     return jwt.decode(token, options={"verify_signature": False})["jti"]
 
 
-def test_recovery_regeneration_and_mfa_disable(phase2):
-    client, factory, headers = phase2
+def test_recovery_regeneration_and_mfa_disable(account_security):
+    client, factory, headers = account_security
     setup, old_codes = _enable_mfa(client, factory, headers)
     current_step = int(time.time() // 30)
     current_code = account_security_service._totp(setup["manual_key"], current_step)
@@ -167,8 +167,8 @@ def test_recovery_regeneration_and_mfa_disable(phase2):
         db.close()
 
 
-def test_session_listing_ownership_revocation_and_refresh_reuse(phase2):
-    client, factory, headers = phase2
+def test_session_listing_ownership_revocation_and_refresh_reuse(account_security):
+    client, factory, headers = account_security
     listed = client.get("/api/v1/account/security/sessions", headers=headers)
     assert listed.status_code == 200
     current = next(item for item in listed.json()["items"] if item["current"])
@@ -185,8 +185,8 @@ def test_session_listing_ownership_revocation_and_refresh_reuse(phase2):
         db.close()
 
 
-def test_password_reset_hashes_token_revokes_sessions_and_is_single_use(phase2):
-    client, factory, _ = phase2
+def test_password_reset_hashes_token_revokes_sessions_and_is_single_use(account_security):
+    client, factory, _ = account_security
     response = client.post("/api/v1/auth/password-reset/request", json={"email": "security@example.com"})
     unknown = client.post("/api/v1/auth/password-reset/request", json={"email": "missing@example.com"})
     assert response.status_code == unknown.status_code == 200
@@ -211,8 +211,8 @@ def test_password_reset_hashes_token_revokes_sessions_and_is_single_use(phase2):
     }).status_code == 400
 
 
-def test_email_verification_token_is_hashed_and_single_use(phase2):
-    client, factory, _ = phase2
+def test_email_verification_token_is_hashed_and_single_use(account_security):
+    client, factory, _ = account_security
     response = client.post("/api/v1/auth/email-verification/request", json={"email": "security@example.com"})
     assert response.status_code == 200
     link = next(part for part in auth_email_service.captured[-1]["text"].split() if part.startswith("http"))
@@ -228,8 +228,8 @@ def test_email_verification_token_is_hashed_and_single_use(phase2):
     assert client.post("/api/v1/auth/email-verification/confirm", json={"token": token}).status_code == 200
 
 
-def test_security_history_is_user_scoped_and_contains_no_codes(phase2):
-    client, factory, headers = phase2
+def test_security_history_is_user_scoped_and_contains_no_codes(account_security):
+    client, factory, headers = account_security
     setup, _ = _enable_mfa(client, factory, headers)
     history = client.get("/api/v1/account/security/events", headers=headers)
     assert history.status_code == 200

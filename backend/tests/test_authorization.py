@@ -46,7 +46,7 @@ PASSWORD = "Socluma-Test-Passphrase-2026!"
 
 
 @pytest.fixture()
-def phase3():
+def authorization():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     engine = create_engine(f"sqlite:///{path}", connect_args={"check_same_thread": False})
@@ -155,35 +155,35 @@ def test_permission_catalog_and_built_in_role_boundaries():
         (OrganizationRole.VIEWER, 403),
     ],
 )
-def test_role_matrix_is_enforced_by_permission(phase3, role, expected):
-    phase3["act_as"](phase3["users"][role].id)
-    response = phase3["client"].get("/api/v1/access-control/permissions")
+def test_role_matrix_is_enforced_by_permission(authorization, role, expected):
+    authorization["act_as"](authorization["users"][role].id)
+    response = authorization["client"].get("/api/v1/access-control/permissions")
     assert response.status_code == expected, response.text
-    effective = phase3["client"].get("/api/v1/access-control/effective")
+    effective = authorization["client"].get("/api/v1/access-control/effective")
     assert effective.status_code == 200
     assert effective.json()["role"] == role.value
 
 
-def test_missing_disabled_and_cross_tenant_context_are_denied(phase3):
+def test_missing_disabled_and_cross_tenant_context_are_denied(authorization):
     for key, code in (("no_membership", "MEMBERSHIP_REQUIRED"), ("disabled", "MEMBERSHIP_DISABLED")):
-        phase3["act_as"](phase3[key].id)
-        response = phase3["client"].get("/api/v1/access-control/effective")
+        authorization["act_as"](authorization[key].id)
+        response = authorization["client"].get("/api/v1/access-control/effective")
         assert response.status_code == 403
         assert response.json()["error_code"] == code
 
-    phase3["act_as"](phase3["users"][OrganizationRole.OWNER].id)
-    response = phase3["client"].get(
-        f"/api/v1/organizations/{phase3['other'].id}/members"
+    authorization["act_as"](authorization["users"][OrganizationRole.OWNER].id)
+    response = authorization["client"].get(
+        f"/api/v1/organizations/{authorization['other'].id}/members"
     )
     assert response.status_code == 404
     assert response.json()["error_code"] == "RESOURCE_ACCESS_DENIED"
 
 
-def test_custom_roles_validate_names_permissions_and_tenant_isolation(phase3):
-    db = phase3["db"]
-    owner = phase3["users"][OrganizationRole.OWNER]
+def test_custom_roles_validate_names_permissions_and_tenant_isolation(authorization):
+    db = authorization["db"]
+    owner = authorization["users"][OrganizationRole.OWNER]
     role = access_control_service.create_role(
-        db, owner, phase3["tenant"].id,
+        db, owner, authorization["tenant"].id,
         CustomRoleCreate(name="  Incident   Reviewer ", permissions=["incidents.view"]),
     )
     assert role.name == "Incident Reviewer"
@@ -191,51 +191,51 @@ def test_custom_roles_validate_names_permissions_and_tenant_isolation(phase3):
 
     with pytest.raises(HTTPException) as reserved:
         access_control_service.create_role(
-            db, owner, phase3["tenant"].id,
+            db, owner, authorization["tenant"].id,
             CustomRoleCreate(name="Administrator", permissions=[]),
         )
     assert reserved.value.detail["error_code"] == "ROLE_PROTECTED"
 
     with pytest.raises(HTTPException) as unknown:
         access_control_service.create_role(
-            db, owner, phase3["tenant"].id,
+            db, owner, authorization["tenant"].id,
             CustomRoleCreate(name="Unknown Scope", permissions=["platform.superuser"]),
         )
     assert unknown.value.detail["error_code"] == "UNKNOWN_PERMISSION"
 
     with pytest.raises(HTTPException) as protected:
         access_control_service.create_role(
-            db, owner, phase3["tenant"].id,
+            db, owner, authorization["tenant"].id,
             CustomRoleCreate(name="Fake Owner", permissions=["organization.delete"]),
         )
     assert protected.value.detail["error_code"] == "OWNER_ONLY_PERMISSION"
 
-    phase3["act_as"](owner.id)
-    assert phase3["client"].delete(
+    authorization["act_as"](owner.id)
+    assert authorization["client"].delete(
         f"/api/v1/access-control/roles/{role.id}"
     ).status_code == 204
-    phase3["act_as"](phase3["outsider"].id)
-    assert phase3["client"].get("/api/v1/access-control/roles").status_code == 200
-    assert phase3["client"].get("/api/v1/access-control/roles").json() == []
+    authorization["act_as"](authorization["outsider"].id)
+    assert authorization["client"].get("/api/v1/access-control/roles").status_code == 200
+    assert authorization["client"].get("/api/v1/access-control/roles").json() == []
 
 
-def test_member_escalation_and_final_owner_are_protected(phase3):
-    db = phase3["db"]
-    admin = phase3["users"][OrganizationRole.ADMINISTRATOR]
-    owner = phase3["users"][OrganizationRole.OWNER]
+def test_member_escalation_and_final_owner_are_protected(authorization):
+    db = authorization["db"]
+    admin = authorization["users"][OrganizationRole.ADMINISTRATOR]
+    owner = authorization["users"][OrganizationRole.OWNER]
     owner_membership = db.query(OrganizationMembership).filter_by(
-        tenant_id=phase3["tenant"].id, user_id=owner.id
+        tenant_id=authorization["tenant"].id, user_id=owner.id
     ).one()
     with pytest.raises(HTTPException) as escalation:
         organization_service.update_member(
-            db, admin, phase3["tenant"].id, owner_membership.id,
+            db, admin, authorization["tenant"].id, owner_membership.id,
             OrganizationRole.VIEWER, None,
         )
     assert escalation.value.detail["error_code"] == "ROLE_ASSIGNMENT_DENIED"
 
     with pytest.raises(HTTPException) as final_owner:
         organization_service.update_member(
-            db, owner, phase3["tenant"].id, owner_membership.id,
+            db, owner, authorization["tenant"].id, owner_membership.id,
             None, False,
         )
     assert final_owner.value.detail["error_code"] in {
@@ -243,9 +243,9 @@ def test_member_escalation_and_final_owner_are_protected(phase3):
     }
 
 
-def test_api_keys_are_hash_only_scoped_expiring_and_tenant_bound(phase3):
-    db = phase3["db"]
-    owner = phase3["users"][OrganizationRole.OWNER]
+def test_api_keys_are_hash_only_scoped_expiring_and_tenant_bound(authorization):
+    db = authorization["db"]
+    owner = authorization["users"][OrganizationRole.OWNER]
     record, raw = api_key_service.create(
         db, owner, "Automation", [Permission.ALERTS_VIEW.value], 30
     )
@@ -264,11 +264,11 @@ def test_api_keys_are_hash_only_scoped_expiring_and_tenant_bound(phase3):
         api_key_service.authenticate(db, raw, Permission.ALERTS_VIEW.value)
 
 
-def test_two_person_approval_is_bound_non_reusable_and_requester_excluded(phase3):
-    db = phase3["db"]
-    tenant = phase3["tenant"]
+def test_two_person_approval_is_bound_non_reusable_and_requester_excluded(authorization):
+    db = authorization["db"]
+    tenant = authorization["tenant"]
     tenant.sensitive_action_approval_mode = "two_person"
-    requester = phase3["users"][OrganizationRole.OWNER]
+    requester = authorization["users"][OrganizationRole.OWNER]
     approver_one = User(
         tenant_id=tenant.id, email="approver1@example.com",
         hashed_password=get_password_hash(PASSWORD), role=UserRole.ADMIN,
@@ -311,16 +311,16 @@ def test_two_person_approval_is_bound_non_reusable_and_requester_excluded(phase3
     assert reuse.value.detail["error_code"] == "APPROVAL_INVALID"
 
 
-def test_switch_tokens_bind_tenant_without_mutating_global_user_context(phase3):
-    db = phase3["db"]
-    user = phase3["users"][OrganizationRole.OWNER]
+def test_switch_tokens_bind_tenant_without_mutating_global_user_context(authorization):
+    db = authorization["db"]
+    user = authorization["users"][OrganizationRole.OWNER]
     original_tenant = user.tenant_id
     db.add(OrganizationMembership(
-        tenant_id=phase3["other"].id, user_id=user.id,
+        tenant_id=authorization["other"].id, user_id=user.id,
         role=OrganizationRole.VIEWER, is_active=True,
     ))
     db.commit()
-    switched = organization_service.switch_organization(db, user, phase3["other"].id)
+    switched = organization_service.switch_organization(db, user, authorization["other"].id)
     token_pair = auth_service.create_token_pair(db, switched)
     claims = jwt.decode(
         token_pair["access_token"],
@@ -328,6 +328,6 @@ def test_switch_tokens_bind_tenant_without_mutating_global_user_context(phase3):
         algorithms=[get_settings().ALGORITHM],
         issuer=get_settings().JWT_ISSUER,
     )
-    assert claims["tid"] == phase3["other"].id
+    assert claims["tid"] == authorization["other"].id
     db.expire_all()
     assert db.get(User, user.id).tenant_id == original_tenant

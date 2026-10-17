@@ -7,7 +7,7 @@ archival, cloud object storage, an external secrets manager, or full DLP.
 ## Event taxonomy and integrity
 
 Audit actions use validated stable lowercase identifiers; established underscore or
-single-token names remain compatible while new Phase 4 events use dotted names.
+single-token names remain compatible while new events use dotted names.
 Events belong to fixed security and operations categories. Each tenant has an ordered chain state. New records contain a
 sequence, previous hash, and HMAC-SHA256 over canonical security fields. The HMAC key
 version is stored; the key is not. Legacy records are deterministically chained with
@@ -43,7 +43,7 @@ Retention processing is tenant-scoped and bounded to 500 records. It only purges
 contiguous chain prefix and stops at the first held or ineligible record. When
 enabled, the prefix is archived first as compressed JSONL containing a manifest,
 checksums, tenant/date/sequence metadata, and sanitized records. Local filesystem
-storage is the Phase 4 implementation; the interface can later support object
+storage is the current implementation; the interface can later support object
 storage. Celery tasks exist, but scheduling remains an operator decision.
 Set `AUDIT_ARTIFACT_ENCRYPTION_ENABLED=true` to encrypt local archive and export
 artifacts with the current versioned encryption key; downloads are decrypted only

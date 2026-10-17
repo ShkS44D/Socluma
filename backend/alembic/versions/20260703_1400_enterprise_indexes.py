@@ -1,4 +1,4 @@
-"""batch38 enterprise indexes
+"""enterprise indexes
 
 Revision ID: 20260703_1400
 Revises: 20260703_1300

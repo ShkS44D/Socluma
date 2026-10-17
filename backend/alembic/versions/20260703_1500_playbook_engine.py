@@ -1,4 +1,4 @@
-"""batch4 playbook engine
+"""playbook engine
 
 Revision ID: 20260703_1500
 Revises: 20260703_1400

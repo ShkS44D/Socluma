@@ -1,4 +1,4 @@
-"""batch3 auth hardening
+"""auth hardening
 
 Revision ID: 20260703_1200
 Revises: 20260629_1300

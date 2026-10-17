@@ -3,10 +3,6 @@ export const REFRESH_TOKEN_STORAGE_KEY = 'socluma.auth.refreshToken'
 export const LEGACY_AUTH_TOKEN_STORAGE_KEY = 'token'
 export const AUTH_LOGOUT_EVENT = 'socluma:auth-logout'
 
-// Migrate browser credentials without discarding an existing installation's login.
-const PREVIOUS_AUTH_TOKEN_STORAGE_KEY = 'vigilantai.auth.accessToken'
-const PREVIOUS_REFRESH_TOKEN_STORAGE_KEY = 'vigilantai.auth.refreshToken'
-
 const decodeBase64Url = (value: string): string => {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
@@ -28,11 +24,9 @@ export const getStoredAuthToken = (): string | null => {
     return primary
   }
 
-  const legacy = sanitizeStoredToken(localStorage.getItem(PREVIOUS_AUTH_TOKEN_STORAGE_KEY))
-    || sanitizeStoredToken(localStorage.getItem(LEGACY_AUTH_TOKEN_STORAGE_KEY))
+  const legacy = sanitizeStoredToken(localStorage.getItem(LEGACY_AUTH_TOKEN_STORAGE_KEY))
   if (legacy) {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, legacy)
-    localStorage.removeItem(PREVIOUS_AUTH_TOKEN_STORAGE_KEY)
     localStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY)
     return legacy
   }
@@ -41,14 +35,7 @@ export const getStoredAuthToken = (): string | null => {
 }
 
 export const getStoredRefreshToken = (): string | null => {
-  const current = sanitizeStoredToken(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY))
-  if (current) return current
-  const previous = sanitizeStoredToken(localStorage.getItem(PREVIOUS_REFRESH_TOKEN_STORAGE_KEY))
-  if (previous) {
-    localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, previous)
-    localStorage.removeItem(PREVIOUS_REFRESH_TOKEN_STORAGE_KEY)
-  }
-  return previous
+  return sanitizeStoredToken(localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY))
 }
 
 export const setStoredAuthToken = (token: string, refreshToken?: string | null): string => {
@@ -59,8 +46,6 @@ export const setStoredAuthToken = (token: string, refreshToken?: string | null):
     localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, sanitizedRefreshToken)
   }
   localStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY)
-  localStorage.removeItem(PREVIOUS_AUTH_TOKEN_STORAGE_KEY)
-  localStorage.removeItem(PREVIOUS_REFRESH_TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY)
@@ -74,10 +59,6 @@ export const clearStoredAuthToken = (): void => {
   sessionStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY)
   sessionStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY)
-  for (const key of [PREVIOUS_AUTH_TOKEN_STORAGE_KEY, PREVIOUS_REFRESH_TOKEN_STORAGE_KEY]) {
-    localStorage.removeItem(key)
-    sessionStorage.removeItem(key)
-  }
 }
 
 interface JwtPayload {

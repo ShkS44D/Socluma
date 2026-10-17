@@ -71,7 +71,7 @@ def percentile(values: list[float], percentage: float) -> float:
 @contextmanager
 def validation_database(database_url: str | None):
     if not database_url:
-        handle, database_path = tempfile.mkstemp(prefix="socluma-batch63-", suffix=".db")
+        handle, database_path = tempfile.mkstemp(prefix="socluma-perf-", suffix=".db")
         os.close(handle)
         engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
         target = {"dialect": "sqlite", "host": "local", "database": database_path, "schema": None}
@@ -93,7 +93,7 @@ def validation_database(database_url: str | None):
             "Refusing to run against a database without an explicit test marker "
             "(test, validation, batch, perf, rc, or ci) in its name"
         )
-    schema_name = f"batch63_{uuid.uuid4().hex[:12]}"
+    schema_name = f"perf_{uuid.uuid4().hex[:12]}"
     admin_engine = create_engine(url, pool_pre_ping=True)
     with admin_engine.begin() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
@@ -136,7 +136,7 @@ def seed_dataset(Session, run_id: str) -> dict[str, Any]:
         for tenant_number in range(2):
             tenant = Tenant(
                 name=f"Performance Tenant {tenant_number}",
-                slug=f"batch63-perf-{run_id}-{tenant_number}",
+                slug=f"perf-perf-{run_id}-{tenant_number}",
             )
             db.add(tenant)
             db.flush()
@@ -382,7 +382,7 @@ def verify_copilot_idempotency(
 ) -> dict[str, Any]:
     primary = tenant_contexts[0]
     callers = max(2, min(concurrency, 16))
-    request_id = f"batch63-idempotency-{'redis' if redis_available else 'local'}-{uuid.uuid4().hex}"
+    request_id = f"perf-idempotency-{'redis' if redis_available else 'local'}-{uuid.uuid4().hex}"
     question = "What evidence supports this incident?"
     headers = {**primary["headers"], "X-Request-ID": request_id}
     original_provider = ai_module.llm_provider.generate_copilot
@@ -665,7 +665,7 @@ def _run_with_engine(
         elif operation == "conversations":
             response = counted_request("get", f"/api/v1/ai/incident/{incident_id}/conversations?limit=20&offset=0", operation, headers=context["headers"])
         else:
-            request_headers = {**context["headers"], "X-Request-ID": f"batch63-{concurrency}-{number}"}
+            request_headers = {**context["headers"], "X-Request-ID": f"perf-{concurrency}-{number}"}
             response = counted_request(
                 "post",
                 f"/api/v1/ai/incident/{incident_id}/chat",
@@ -730,7 +730,7 @@ def _run_with_engine(
         request_roles: dict[str, list[str]] = {}
         for message in messages:
             request_id = (message.message_metadata or {}).get("request_id")
-            if request_id and str(request_id).startswith(f"batch63-{concurrency}-"):
+            if request_id and str(request_id).startswith(f"perf-{concurrency}-"):
                 request_roles.setdefault(str(request_id), []).append(message.role)
         duplicate_request_records = {
             request_id: roles

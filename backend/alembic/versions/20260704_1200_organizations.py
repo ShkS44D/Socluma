@@ -1,4 +1,4 @@
-"""batch6 organizations and memberships
+"""organizations and memberships
 
 Revision ID: 20260704_1200
 Revises: 20260703_1600

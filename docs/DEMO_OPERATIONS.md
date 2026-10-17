@@ -1,4 +1,4 @@
-# Phase 7.6 Demo and Operations Guide
+# Demo and Operations Guide
 
 ## Vendor-neutral controlled demonstration
 

@@ -30,4 +30,4 @@ Security history records UTC time, event/result/severity, safe IP/user-agent/dev
 
 ## Compatibility and limitations
 
-The React client still stores bearer access and refresh tokens through the existing browser-storage abstraction to preserve API, collector, and integration compatibility. A future transport migration should move browser refresh tokens to scoped HttpOnly secure cookies with CSRF protection. Phase 2 does not implement SSO, SAML, OIDC enterprise login, SCIM, CAPTCHA, GeoIP, or compromised-password-provider checks.
+The React client still stores bearer access and refresh tokens through the existing browser-storage abstraction to preserve API, collector, and integration compatibility. A future transport migration should move browser refresh tokens to scoped HttpOnly secure cookies with CSRF protection. The authentication service does not implement SSO, SAML, OIDC enterprise login, SCIM, CAPTCHA, GeoIP, or compromised-password-provider checks.

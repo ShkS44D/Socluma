@@ -28,29 +28,24 @@ function loadModule(relativePath) {
   return { api: context.exports, localStorage, sessionStorage }
 }
 
-test('previous access and refresh credentials migrate to Socluma keys', () => {
+test('stored access and refresh credentials are normalized', () => {
   const { api, localStorage } = loadModule('../../src/services/api/authStorage.ts')
-  localStorage.setItem('vigilantai.auth.accessToken', 'Bearer old-access')
-  localStorage.setItem('vigilantai.auth.refreshToken', 'old-refresh')
-  assert.equal(api.getStoredAuthToken(), 'old-access')
-  assert.equal(api.getStoredRefreshToken(), 'old-refresh')
-  assert.equal(localStorage.getItem(api.AUTH_TOKEN_STORAGE_KEY), 'old-access')
-  assert.equal(localStorage.getItem(api.REFRESH_TOKEN_STORAGE_KEY), 'old-refresh')
-  assert.equal(localStorage.getItem('vigilantai.auth.accessToken'), null)
-  assert.equal(localStorage.getItem('vigilantai.auth.refreshToken'), null)
+  localStorage.setItem(api.AUTH_TOKEN_STORAGE_KEY, 'Bearer access-value')
+  localStorage.setItem(api.REFRESH_TOKEN_STORAGE_KEY, ' refresh-value ')
+  assert.equal(api.getStoredAuthToken(), 'access-value')
+  assert.equal(api.getStoredRefreshToken(), 'refresh-value')
 })
 
-test('access-token update preserves a previous refresh token', () => {
+test('access-token update preserves the refresh token', () => {
   const { api, localStorage } = loadModule('../../src/services/api/authStorage.ts')
-  localStorage.setItem('vigilantai.auth.refreshToken', 'old-refresh')
+  localStorage.setItem(api.REFRESH_TOKEN_STORAGE_KEY, 'existing-refresh')
   api.setStoredAuthToken('new-access')
-  assert.equal(api.getStoredRefreshToken(), 'old-refresh')
+  assert.equal(api.getStoredRefreshToken(), 'existing-refresh')
 })
 
-test('logout removes current and previous credentials from both stores', () => {
+test('logout removes credentials from both stores', () => {
   const { api, localStorage, sessionStorage } = loadModule('../../src/services/api/authStorage.ts')
-  const keys = [api.AUTH_TOKEN_STORAGE_KEY, api.REFRESH_TOKEN_STORAGE_KEY, 'token',
-    'vigilantai.auth.accessToken', 'vigilantai.auth.refreshToken']
+  const keys = [api.AUTH_TOKEN_STORAGE_KEY, api.REFRESH_TOKEN_STORAGE_KEY, 'token']
   for (const storage of [localStorage, sessionStorage]) {
     for (const key of keys) storage.setItem(key, 'credential')
   }
@@ -60,21 +55,19 @@ test('logout removes current and previous credentials from both stores', () => {
   }
 })
 
-test('theme preference migrates without changing the selected theme', () => {
+test('theme preference returns the selected theme', () => {
   const { api, localStorage } = loadModule('../../src/utils/themePreference.ts')
-  localStorage.setItem('vigilantai-theme-preference', 'light')
+  localStorage.setItem(api.THEME_PREFERENCE_KEY, 'light')
   assert.equal(api.getStoredThemePreference(), 'light')
   assert.equal(localStorage.getItem(api.THEME_PREFERENCE_KEY), 'light')
-  assert.equal(localStorage.getItem('vigilantai-theme-preference'), null)
 })
 
-test('Socluma credentials and theme take precedence over previous values', () => {
+test('namespaced credentials take precedence over the fallback key', () => {
   const auth = loadModule('../../src/services/api/authStorage.ts')
-  auth.localStorage.setItem('vigilantai.auth.accessToken', 'old-access')
+  auth.localStorage.setItem('token', 'fallback-access')
   auth.localStorage.setItem(auth.api.AUTH_TOKEN_STORAGE_KEY, 'current-access')
   assert.equal(auth.api.getStoredAuthToken(), 'current-access')
   const theme = loadModule('../../src/utils/themePreference.ts')
-  theme.localStorage.setItem('vigilantai-theme-preference', 'light')
   theme.localStorage.setItem(theme.api.THEME_PREFERENCE_KEY, 'dark')
   assert.equal(theme.api.getStoredThemePreference(), 'dark')
 })

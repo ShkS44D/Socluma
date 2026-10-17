@@ -24,11 +24,11 @@ def db():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
-    tenant = Tenant(name="Phase 4", slug="phase-4")
+    tenant = Tenant(name="Audit tenant", slug="audit-tenant")
     session.add(tenant)
     session.flush()
     user = User(
-        tenant_id=tenant.id, email="phase4-owner@example.com",
+        tenant_id=tenant.id, email="audit-owner@example.com",
         hashed_password="not-used", role=UserRole.ADMIN,
     )
     session.add(user)
@@ -45,11 +45,11 @@ def test_audit_chain_context_sanitization_and_idempotency(db):
         severity="high", before_values={"nested": {"password": "never-store"}},
         after_values={"authorization": "Bearer never-store"},
         details={"mfa_secret": "never-store", "safe": "visible"},
-        idempotency_key="phase4-denial-1", strict=True,
+        idempotency_key="audit-denial-1", strict=True,
     )
     duplicate = audit_service.record(
         session, action="permission.access.denied", user=user, status="denied",
-        idempotency_key="phase4-denial-1", strict=True,
+        idempotency_key="audit-denial-1", strict=True,
     )
     second = audit_service.record(
         session, action="organization.settings.updated", user=user,
@@ -129,8 +129,8 @@ def test_versioned_encryption_reads_previous_key_and_fails_closed():
     old_version = settings.ENCRYPTION_CURRENT_KEY_VERSION
     try:
         settings.ENCRYPTION_KEYS_JSON = json.dumps({
-            "1": "phase4-old-encryption-key-material-at-least-32",
-            "2": "phase4-new-encryption-key-material-at-least-32",
+            "1": "audit-old-encryption-key-material-at-least-32",
+            "2": "audit-new-encryption-key-material-at-least-32",
         })
         settings.ENCRYPTION_CURRENT_KEY_VERSION = 1
         old_ciphertext = encrypt_json_secret({"secret": "value"})
@@ -142,7 +142,7 @@ def test_versioned_encryption_reads_previous_key_and_fails_closed():
         assert b"audit artifact" not in encrypted_payload
         assert decrypt_bytes(encrypted_payload) == b"audit artifact"
         settings.ENCRYPTION_KEYS_JSON = json.dumps({
-            "2": "phase4-new-encryption-key-material-at-least-32",
+            "2": "audit-new-encryption-key-material-at-least-32",
         })
         with pytest.raises(DecryptionError, match="DECRYPTION_FAILED"):
             decrypt_json_secret(old_ciphertext)

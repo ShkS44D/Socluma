@@ -1,8 +1,8 @@
 # Socluma Architecture
 
-Phase 7 separates stable detection identities from immutable content versions.
+Detection engineering separates stable detection identities from immutable content versions.
 Only an explicit production version executes; matches retain exact version/hash
-provenance. See [docs/PHASE7_DETECTION_ENGINEERING.md](docs/PHASE7_DETECTION_ENGINEERING.md).
+provenance. See [docs/DETECTION_ENGINEERING.md](docs/DETECTION_ENGINEERING.md).
 
 ## Commercial IOC boundary
 
@@ -11,11 +11,11 @@ TAXII/MISP, imports, bulk actions, hunts, and reports execute as bounded tenant-
 External HTTP requests revalidate every destination and redirect. IOC response items are
 recommendations bound to the sensitive-action approval workflow; no recommendation executes
 automatically. The relationship graph is a bounded relational projection with an accessible
-table fallback. See `docs/IOC_INTELLIGENCE.md` and `docs/PHASE76_DEMO_READINESS.md`.
+table fallback. See `docs/IOC_INTELLIGENCE.md` and `docs/DEMO_OPERATIONS.md`.
 
 ## Search and investigation boundary
 
-Phase 6 keeps search inside SQLAlchemy/PostgreSQL/SQLite. A typed allowlist parser produces an AST that becomes only parameterized ORM expressions after tenant and permission scope. Entity extraction is bounded downstream ingestion work; schedules and export jobs revalidate tenant context. See `docs/PHASE6_SEARCH_INVESTIGATIONS.md`.
+Search remains inside SQLAlchemy/PostgreSQL/SQLite. A typed allowlist parser produces an AST that becomes only parameterized ORM expressions after tenant and permission scope. Entity extraction is bounded downstream ingestion work; schedules and export jobs revalidate tenant context. See `docs/SEARCH_INVESTIGATIONS.md`.
 
 ## Audit and data-protection boundary
 
@@ -25,7 +25,7 @@ HMAC chain records. Retention workers archive only a contiguous eligible chain
 prefix and honor active legal holds. Export workers read through the same tenant
 filter builder and write opaque, expiring artifacts. Sensitive MFA and connector
 values use versioned authenticated encryption; keys remain runtime configuration.
-See `docs/PHASE4_AUDIT_DATA_PROTECTION.md`.
+See `docs/AUDIT_DATA_PROTECTION.md`.
 
 This document describes the architecture implemented in the current repository. It intentionally avoids future-only services and roadmap claims.
 
@@ -123,7 +123,7 @@ Protected routes use dependency-based role checks. Collector-only routes use col
 
 ## Multi-Tenancy
 
-The database tenant model is the organization boundary. Batch 6 extends tenants with organization metadata, quotas, subscription fields, lifecycle status, memberships, invitations, and usage snapshots while preserving existing `tenant_id` API contracts.
+The database tenant model is the organization boundary. Organizations extend tenants with organization metadata, quotas, subscription fields, lifecycle status, memberships, invitations, and usage snapshots while preserving existing `tenant_id` API contracts.
 
 Tenant isolation rules:
 
@@ -375,4 +375,4 @@ The repository is not yet a complete enterprise SaaS release. The following are 
 - Object storage for evidence artifacts.
 - Kubernetes manifests.
 
-Those should be handled in later batches after the current platform foundation is fully verified.
+These capabilities require separate implementation and operational validation.

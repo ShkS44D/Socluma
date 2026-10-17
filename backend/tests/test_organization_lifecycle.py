@@ -55,12 +55,12 @@ def db():
 
 
 def _owner_and_org(db):
-    primary = Tenant(name="Primary", slug="phase1-primary")
+    primary = Tenant(name="Primary", slug="organization-primary")
     db.add(primary)
     db.flush()
     owner = User(
         tenant_id=primary.id,
-        email="phase1-owner@example.com",
+        email="organization-owner@example.com",
         hashed_password=get_password_hash("Socluma-Test-Passphrase-2026!"),
         role=UserRole.ADMIN,
     )
@@ -70,7 +70,7 @@ def _owner_and_org(db):
     target = organization_service.create_organization(
         db,
         owner,
-        OrganizationCreate(name="Target", slug="phase1-target", deletion_pin="1234"),
+        OrganizationCreate(name="Target", slug="organization-target", deletion_pin="1234"),
     )
     db.commit()
     return owner, target
@@ -100,7 +100,7 @@ def test_wrong_pin_lockout_and_non_owner_cannot_cancel(db):
     owner, target = _owner_and_org(db)
     viewer = User(
         tenant_id=target.id,
-        email="phase1-viewer@example.com",
+        email="organization-viewer@example.com",
         hashed_password=get_password_hash("Socluma-Test-Passphrase-2026!"),
         role=UserRole.VIEWER,
     )
@@ -169,7 +169,7 @@ def test_purge_requires_eligibility_and_preserves_audit_evidence(db):
 
 def test_usage_is_tenant_scoped_records_storage_and_history(db):
     owner, target = _owner_and_org(db)
-    other = Tenant(name="Other", slug="phase1-other")
+    other = Tenant(name="Other", slug="organization-other")
     db.add(other)
     db.flush()
     db.add_all(
@@ -249,7 +249,7 @@ def test_production_configuration_rejects_placeholders_and_unsafe_docs():
     valid.validate_for_runtime()
 
 
-def test_critical_phase1_constraints_exist(db):
+def test_critical_organization_constraints_exist(db):
     inspector = inspect(db.get_bind())
     tenant_columns = {column["name"] for column in inspector.get_columns("tenants")}
     assert {

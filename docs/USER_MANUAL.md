@@ -2,11 +2,11 @@
 
 For version history, reviews, tests, simulation, exceptions, maintenance windows,
 ATT&CK coverage, and content packs, see
-[Phase 7 Detection Engineering](PHASE7_DETECTION_ENGINEERING.md).
+[Detection Engineering](DETECTION_ENGINEERING.md).
 
 ## Search and investigations
 
-Open **Search**, choose Events, Alerts, Incidents, or Entities, enter a structured query, and run it. Results stay inside the active organization and default to 24 hours. Save useful queries or use **Investigation Workspace** for resources, evidence, and notes. Syntax and troubleshooting are in `PHASE6_SEARCH_INVESTIGATIONS.md`.
+Open **Search**, choose Events, Alerts, Incidents, or Entities, enter a structured query, and run it. Results stay inside the active organization and default to 24 hours. Save useful queries or use **Investigation Workspace** for resources, evidence, and notes. Syntax and troubleshooting are in `SEARCH_INVESTIGATIONS.md`.
 
 ## Audit administration
 

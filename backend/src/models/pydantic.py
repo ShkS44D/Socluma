@@ -1382,9 +1382,9 @@ class DetectionRuleBase(BaseModel):
     type: RuleType = RuleType.CUSTOM
     query: Optional[str] = None
     sigma_rule: Optional[str] = None
-    # New Phase 16 fields
+    # Detection rule metadata
     rule_type: RuleType = RuleType.CUSTOM
-    rule_content: Optional[Dict[str, Any]] = None  # New field for Phase 6
+    rule_content: Optional[Dict[str, Any]] = None
     event_type: Optional[EventType] = None
     severity: Severity = Severity.MEDIUM
     enabled: bool = True
@@ -1403,9 +1403,9 @@ class DetectionRuleUpdate(BaseModel):
     type: Optional[RuleType] = None
     query: Optional[str] = None
     sigma_rule: Optional[str] = None
-    # New Phase 16 fields
+    # Detection rule metadata
     rule_type: Optional[RuleType] = None
-    rule_content: Optional[Dict[str, Any]] = None  # New field for Phase 6
+    rule_content: Optional[Dict[str, Any]] = None
     event_type: Optional[EventType] = None
     severity: Optional[Severity] = None
     enabled: Optional[bool] = None

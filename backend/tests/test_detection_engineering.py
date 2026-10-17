@@ -8,7 +8,7 @@ def event(identity: str, seconds: int, **normalized):
     return SimpleNamespace(
         id=identity,
         timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds),
-        source="phase7-test",
+        source="detection-test",
         severity="medium",
         normalized_event=normalized,
         raw_event={},

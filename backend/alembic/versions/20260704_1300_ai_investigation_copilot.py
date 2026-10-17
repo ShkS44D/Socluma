@@ -1,4 +1,4 @@
-"""batch7 ai investigation copilot
+"""ai investigation copilot
 
 Revision ID: 20260704_1300
 Revises: 20260704_1200

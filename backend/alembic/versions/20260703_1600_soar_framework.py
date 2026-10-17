@@ -1,4 +1,4 @@
-"""batch5 soar response action framework
+"""soar response action framework
 
 Revision ID: 20260703_1600
 Revises: 20260703_1500

@@ -1,4 +1,4 @@
-# Phase 7 Detection Engineering
+# Detection Engineering
 
 ## Architecture and lifecycle
 
@@ -22,7 +22,7 @@ Two-person approval is enabled by default, is bound to the version/hash, and exp
 
 Structured rules support event match, threshold, frequency, aggregation (`count`,
 `distinct_count`, `min`, `max`, `sum`, `avg`), ordered sequence, and correlation.
-Fields come from the Phase 6 normalized-field catalog. Windows, groups, sequence
+Fields come from the normalized-field catalog. Windows, groups, sequence
 steps, cardinality, clauses, input size, and complexity are bounded. No `eval`,
 arbitrary Python, SQL, shell, or template execution is supported.
 
@@ -52,7 +52,7 @@ prevent retry duplication.
 Exceptions are tenant-scoped, time-bound typed predicates. Suppression policies
 bound alert volume, while maintenance windows suppress scoped alert creation.
 Suppressed matches remain stored and report why they were suppressed. Permanent
-or broad exemptions should continue through an approval workflow; Phase 7 does not
+or broad exemptions should continue through an approval workflow; the approval workflow does not
 auto-approve them.
 
 ## Health, quality, MITRE, and content packs
@@ -96,11 +96,11 @@ audit path. Raw event payloads and secrets are excluded.
 ## API errors and compatibility
 
 Cross-tenant lookups return 404. Permissions return 403. Lifecycle conflicts return
-409, validation errors 422, and oversized datasets 413. Responses use stable Phase
-7 error codes without SQL, stack traces, or internal paths.
+409, validation errors 422, and oversized datasets 413. Responses use stable
+error codes without SQL, stack traces, or internal paths.
 
-Migration `20260729_1800` upgrades from Phase 6 head `20260729_1700` on SQLite and
-PostgreSQL. Downgrade removes Phase 7 structures but is destructive to Phase 7
+Migration `20260729_1800` upgrades from revision `20260729_1700` on SQLite and
+PostgreSQL. Downgrade removes detection structures but is destructive to detection
 history; back up first. Existing rule IDs, alerts, incident correlation, Sigma
 behavior, and event ingestion are preserved.
 

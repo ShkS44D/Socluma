@@ -1,4 +1,4 @@
-# Phase 5 — Telemetry Ingestion and Collector Management
+# Telemetry Ingestion and Collector Management
 
 ## Architecture
 
@@ -56,7 +56,7 @@ receiver deployment; the current release accepts syslog payloads over authentica
 
 ## Permissions and audit
 
-Phase 5 adds telemetry, data-source, collector enrollment/credential/policy/group/update, metrics, import, replay,
+Telemetry ingestion provides telemetry, data-source, collector enrollment/credential/policy/group/update, metrics, import, replay,
 and dead-letter permissions. Administrative lifecycle actions and batch summaries are audited without raw events,
 tokens, passwords, or authorization headers.
 
@@ -69,9 +69,9 @@ hashes by the compatibility path.
 ## Operational limits
 
 - Downstream detection is at-least-once; event processing status prevents intentional duplicate processing.
-- This phase provides one active policy version per newly created policy. Rich staged rollout controls are API
+- The service provides one active policy version per newly created policy. Rich staged rollout controls are API
   foundations, not a complete release orchestration engine.
 - Source health is request-driven. Scheduled stale-source notifications should be connected to the deployment's
-  notification channel in a later operations phase.
+  notification channel through an explicit deployment schedule.
 - File imports are processed inline after upload in this release; large enterprise imports should move to object
   storage plus asynchronous workers.

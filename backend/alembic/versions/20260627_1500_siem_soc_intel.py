@@ -1,4 +1,4 @@
-"""Phase 5: SIEM Integration & Advanced SOC Intelligence
+"""SIEM Integration & Advanced SOC Intelligence
 
 Revision ID: 202606271500
 Revises: 202606271400

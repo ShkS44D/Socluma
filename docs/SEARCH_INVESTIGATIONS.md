@@ -1,4 +1,4 @@
-# Phase 6 search and investigation workspace
+# Search and Investigation Workspace
 
 ## Architecture and safety
 
@@ -36,11 +36,11 @@ Binary attachment storage is deferred. The metadata endpoint validates configure
 
 ## Exports and reports
 
-Expiring jobs produce search CSV, JSONL, or evidence ZIP, and investigation JSON/Markdown reports. Jobs recheck access, enforce row limits, use safe projections, create manifests/checksums, store through Phase 4 encrypted artifact storage, and audit requests/downloads.
+Expiring jobs produce search CSV, JSONL, or evidence ZIP, and investigation JSON/Markdown reports. Jobs recheck access, enforce row limits, use safe projections, create manifests/checksums, store through encrypted artifact storage, and audit requests/downloads.
 
 ## Permissions, retention, and troubleshooting
 
-Phase 3 permissions separately cover resources, saved searches, schedules, exports, investigations, graphs, bookmarks, snapshots, and attachments. Viewer access is read-only; analysts have normal investigation tools without export/snapshot authority; managers have schedule/export/evidence authority. Credential fields and audit records are excluded from general search. Phase 4 classification, expiry, audit integrity, retention, and legal-hold rules remain authoritative.
+Resource permissions separately cover resources, saved searches, schedules, exports, investigations, graphs, bookmarks, snapshots, and attachments. Viewer access is read-only; analysts have normal investigation tools without export/snapshot authority; managers have schedule/export/evidence authority. Credential fields and audit records are excluded from general search. Classification, expiry, audit integrity, retention, and legal-hold rules remain authoritative.
 
 - `SEARCH_FIELD_UNKNOWN`: use a field from `/search/fields`.
 - `SEARCH_TIME_RANGE_TOO_LARGE`: narrow the range or obtain extended permission.

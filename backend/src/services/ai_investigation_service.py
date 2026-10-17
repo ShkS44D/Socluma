@@ -932,8 +932,7 @@ class AIInvestigationService:
 
     @contextmanager
     def _chat_request_lock(self, scope: str):
-        # Keep the lock namespace stable across deployments of the renamed app.
-        lock_key = "vigilantai:ai:idempotency:" + hashlib.sha256(scope.encode("utf-8")).hexdigest()
+        lock_key = self.settings.AI_IDEMPOTENCY_NAMESPACE + hashlib.sha256(scope.encode("utf-8")).hexdigest()
         redis_lock = None
         try:
             client = redis.from_url(

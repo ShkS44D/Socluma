@@ -1,4 +1,4 @@
-# IOC Intelligence (Phases 7.5 and 7.6)
+# IOC Intelligence
 
 Socluma keeps IOC intelligence tenant-scoped. An IOC is identified by organization, type, and
 canonical normalized value. Original input is retained for provenance; matching uses only the
@@ -63,7 +63,7 @@ recipient scope is supplied.
 ## Operational limits and deferred scope
 
 Configuration bounds provider concurrency/retries, TTLs, bulk size, hunt range, STIX/TAXII/MISP
-payloads, watchlist size, and artifact lifetime. This phase does not provide a TAXII server,
+payloads, watchlist size, and artifact lifetime. The service does not provide a TAXII server,
 unrestricted public sharing, automatic destructive response, a graph database, full MISP/STIX
 object coverage, or unlimited telemetry scale. Real provider tests require tenant-supplied
 credentials and network access; automated tests use mocks and never contact providers.

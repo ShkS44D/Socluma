@@ -1,4 +1,4 @@
-"""Phase 6: Detection matches and event processing
+"""Detection matches and event processing
 
 Revision ID: 202606271700
 Revises: 202606271600

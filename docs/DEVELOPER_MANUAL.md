@@ -1,13 +1,13 @@
 # Socluma Developer Manual
 
 For rule schemas, lifecycle transitions, simulation workers, migration 1800, and
-the offline CLI, see [Phase 7 Detection Engineering](PHASE7_DETECTION_ENGINEERING.md).
+the offline CLI, see [Detection Engineering](DETECTION_ENGINEERING.md).
 
-## Phase 6 search contract
+## Search contract
 
-See `PHASE6_SEARCH_INVESTIGATIONS.md`. Add searchable fields only through the central catalog with type, operators, resource, and permission, followed by parser, tenant-isolation, projection, and index tests. Never pass display query text to raw SQL.
+See `SEARCH_INVESTIGATIONS.md`. Add searchable fields only through the central catalog with type, operators, resource, and permission, followed by parser, tenant-isolation, projection, and index tests. Never pass display query text to raw SQL.
 
-## Phase 4 audit contract
+## Audit contract
 
 Call `audit_service.record` with a stable action, explicit resource, result, and safe
 before/after values for every security or administrative state change. Never insert,
@@ -15,7 +15,7 @@ update, or delete `AuditLog` directly. Metadata is sanitized centrally, but call
 must still avoid collecting unnecessary personal or secret data. Use
 `audit_management_service` and the existing Celery tasks for retention and exports.
 Configure versioned encryption and integrity keys as documented in
-`PHASE4_AUDIT_DATA_PROTECTION.md`; never put keys in models, APIs, logs, or fixtures.
+`AUDIT_DATA_PROTECTION.md`; never put keys in models, APIs, logs, or fixtures.
 
 ## Architecture
 
@@ -39,9 +39,9 @@ Tenants store only a Passlib hash, failure count, and lock timestamp. A four-dig
 
 ## Database and migrations
 
-`20260727_1200_security_rbac_audit.py` adds PIN state, custom roles, membership assignment, and audit context. `20260729_1200_phase1_foundation_integrity.py` adds scheduled-deletion timestamps/requester integrity and unique daily usage aggregates. `20260729_1300_authentication_account_security.py` adds hardened account/session state. `20260729_1400_granular_rbac_tenant_isolation.py` adds permission revisions, normalized protected custom roles, scoped API keys, and sensitive-action approvals. These migrations use additive or batch-safe operations for PostgreSQL and SQLite. Back up and verify production data first, confirm `alembic heads` reports one head, then apply with `alembic upgrade head`.
+`20260727_1200_security_rbac_audit.py` adds PIN state, custom roles, membership assignment, and audit context. `20260729_1200_foundation_integrity.py` adds scheduled-deletion timestamps/requester integrity and unique daily usage aggregates. `20260729_1300_authentication_account_security.py` adds hardened account/session state. `20260729_1400_granular_rbac_tenant_isolation.py` adds permission revisions, normalized protected custom roles, scoped API keys, and sensitive-action approvals. These migrations use additive or batch-safe operations for PostgreSQL and SQLite. Back up and verify production data first, confirm `alembic heads` reports one head, then apply with `alembic upgrade head`.
 
-Organization deletion is requested through `DELETE /api/v1/organizations/{id}`, cancelled through `POST /api/v1/organizations/{id}/deletion/cancel`, and inspected through `GET /api/v1/organizations/{id}/deletion/status`. The service uses row locking, makes request/cancel/purge transitions idempotent, and writes the state change and audit record in one transaction. `purge_due_organizations` is an explicitly invokable Celery task; no scheduler is introduced in this phase.
+Organization deletion is requested through `DELETE /api/v1/organizations/{id}`, cancelled through `POST /api/v1/organizations/{id}/deletion/cancel`, and inspected through `GET /api/v1/organizations/{id}/deletion/status`. The service uses row locking, makes request/cancel/purge transitions idempotent, and writes the state change and audit record in one transaction. `purge_due_organizations` is an explicitly invokable Celery task; the task must be scheduled explicitly.
 
 Usage middleware records one atomic counter row per tenant and UTC date. `GET /api/v1/organizations/{id}/usage` returns current counts and refreshes the daily snapshot; `/usage/history` accepts `start_date` and `end_date`, rejects reversed ranges, and limits requests to 366 days. Storage is the estimated length of managed application payloads, not infrastructure capacity.
 
@@ -51,7 +51,7 @@ Usage middleware records one atomic counter row per tenant and UTC date. `GET /a
 
 ## Socluma Copilot
 
-Socluma Copilot retains compatibility with existing internal AI route and class names. Services build tenant-scoped evidence packages, invoke the configured provider, persist safe artifacts, and audit safe request metadata. Never log prompt secrets or full sensitive payloads.
+Socluma Copilot builds on the AI API and investigation services. Services build tenant-scoped evidence packages, invoke the configured provider, persist safe artifacts, and audit safe request metadata. Never log prompt secrets or full sensitive payloads.
 
 ## Collectors, detection, correlation, playbooks, and SOAR
 
@@ -59,7 +59,7 @@ Collectors authenticate with hashed lookup tokens, normalize source events, and 
 
 ## Commercial IOC operations
 
-Phase 7.6 uses `ioc_commercial_service`, `/api/v1/ioc-commercial`, and bounded Celery
+IOC operations use `ioc_commercial_service`, `/api/v1/ioc-commercial`, and bounded Celery
 tasks. Migration `20260730_1950` adds threat-source metadata, sync jobs, import and bulk jobs,
 review history, response recommendations, notification deduplication, and report jobs. Every
 lookup is tenant-scoped.

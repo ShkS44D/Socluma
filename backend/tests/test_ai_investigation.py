@@ -247,7 +247,7 @@ class AIInvestigationTests(unittest.TestCase):
 
     def test_chat_retry_with_same_request_id_is_idempotent(self):
         self._as_user(self.analyst_id)
-        headers = {"X-Request-ID": "batch-62-chat-retry"}
+        headers = {"X-Request-ID": "conversation-chat-retry"}
         first = self.client.post(
             f"/api/v1/ai/incident/{self.incident_id}/chat",
             json={"message": "Summarize this incident"},
@@ -291,7 +291,7 @@ class AIInvestigationTests(unittest.TestCase):
                     suggested_follow_up_questions=[],
                 ))
             )
-            headers = {"X-Request-ID": "batch-63-double-click"}
+            headers = {"X-Request-ID": "idempotency-double-click"}
             first = self.client.post(
                 f"/api/v1/ai/incident/{self.incident_id}/chat",
                 json={"message": "Which alert created it?"},
@@ -333,7 +333,7 @@ class AIInvestigationTests(unittest.TestCase):
                     suggested_follow_up_questions=[],
                 )
             )
-            headers = {"X-Request-ID": "batch-63-scope"}
+            headers = {"X-Request-ID": "idempotency-scope"}
             self._as_user(self.analyst_id)
             first = self.client.post(
                 f"/api/v1/ai/incident/{self.incident_id}/chat",

@@ -1,4 +1,4 @@
-"""batch35 production hardening
+"""production hardening
 
 Revision ID: 20260703_1300
 Revises: 20260703_1200

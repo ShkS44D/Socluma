@@ -1,4 +1,4 @@
-"""Phase 4: IOC, Detection Rules, Comments, Notifications
+"""IOC, Detection Rules, Comments, Notifications
 
 Revision ID: 202606271400
 Revises: 202606271300
