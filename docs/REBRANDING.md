@@ -22,7 +22,7 @@ The project is now **Socluma — AI-Assisted Security Operations**, a personal c
 
 ## Repository cleanup
 
-Removed only the empty root `package-lock.json` (there is no root Node.js package) and four empty, unreferenced component index files under `admin`, `alerts`, `auth`, and `common`. The frontend retains its actual package lockfile. The obsolete MVP roadmap was moved into the documentation archive so it cannot be mistaken for the current architecture.
+Removed the empty root `package-lock.json` (there is no root Node.js package), four empty, unreferenced component index files under `admin`, `alerts`, `auth`, and `common`, and the empty, unreferenced pages index. The frontend retains its actual package lockfile. The obsolete MVP roadmap was deleted rather than retained in an archive.
 
 Database migrations, fixtures, tests, operational guides, validation history, and generated user documents are retained.
 
@@ -36,5 +36,11 @@ Database migrations, fixtures, tests, operational guides, validation history, an
 - Development, acceptance, and production Compose configuration checks passed. Acceptance and production interpolation used temporary validation values, not saved credentials.
 - Backend validation disabled external AI and threat-intelligence providers for the test process. The full 238-test backend suite was interrupted before completion; it is not reported as passed.
 - Docker was not running, so live container, browser end-to-end, and PostgreSQL runtime checks were not performed for this rename.
-- Five unused tracked files were removed and the MVP roadmap was archived. Generated cache directories were retained after automatic approval review blocked the recursive cleanup command.
+- The initial rename removed five unused tracked files. A subsequent cleanup deleted the obsolete MVP roadmap and the empty pages index instead of retaining archived scaffolding.
 - Local credentials, databases, collector state, and generated PDFs are excluded from the commit. GitHub repository visibility is preserved as public.
+
+## Follow-up deletion cleanup
+
+The obsolete `docs/archive/MVP_ARCHITECTURE.md` and empty, unreferenced `frontend/src/pages/index.ts` are deleted from the working tree and current repository rather than retained as archived files. Existing Git commits still contain earlier revisions; this cleanup does not rewrite repository history.
+
+Eight stale test databases under `tmp/`, five generated cache or temporary-test directories, and the resulting empty directories were verified as cleanup candidates. Automatic approval review blocked the shell deletion command, so these ignored local artifacts remain. Active application databases, credentials, dependencies, generated documents, and their authoring sources are retained.
