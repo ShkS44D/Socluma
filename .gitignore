@@ -43,7 +43,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-dist/
 dist-ssr/
 *.local
 coverage/
@@ -105,6 +104,3 @@ backend/validation-*
 # OS
 .DS_Store
 Thumbs.db
-
-# Alembic migrations (except __init__.py)
-alembic/versions/*.pyc
