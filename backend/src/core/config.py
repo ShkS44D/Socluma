@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     PROJECT_NAME: str = "Socluma"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "1.1.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
     DOCS_ENABLED: bool = True

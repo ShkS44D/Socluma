@@ -1,5 +1,7 @@
 # Socluma — AI-Assisted Security Operations
 
+Current release: **v1.1.0**.
+
 Socluma brings telemetry collection, threat detection, incident investigation, and response workflows into one security operations workspace. Analysts can follow an alert back to its source events, investigate related activity, and use AI assistance grounded in the incident evidence.
 
 The repository contains a FastAPI backend, a React analyst console, a Python collector agent, database migrations, background workers, and Docker configurations for development and production-style deployments.

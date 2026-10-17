@@ -52,7 +52,7 @@ class HealthCheck(BaseModel):
     redis: Optional[str] = None
     request_id: Optional[str] = None
     service: str = "backend"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     environment: str
     timestamp: datetime
     checks: Dict[str, HealthComponent]
@@ -62,7 +62,7 @@ class HealthStatus(BaseModel):
     status: str
     request_id: Optional[str] = None
     service: str = "backend"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     timestamp: datetime
 
 
