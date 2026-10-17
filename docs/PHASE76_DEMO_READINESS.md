@@ -43,7 +43,7 @@ sha256,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,controll
 
 ## Honest limitations
 
-VigilantAI implements a bounded TAXII client and a practical MISP attribute subset, not a TAXII
+Socluma implements a bounded TAXII client and a practical MISP attribute subset, not a TAXII
 server or complete MISP/STIX platform. The relationship graph uses the relational database rather
 than a graph database. Historical hunts and reports are intentionally capped. Response items are
 recommendations with human approval, not automatic vendor-agnostic containment. Real provider

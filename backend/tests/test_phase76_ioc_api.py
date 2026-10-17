@@ -21,7 +21,7 @@ from src.models.sqlalchemy import (
 
 @pytest.fixture()
 def ioc_api():
-    with tempfile.TemporaryDirectory(prefix="vigilantai-ioc-api-") as directory:
+    with tempfile.TemporaryDirectory(prefix="socluma-ioc-api-") as directory:
         path = f"{directory}/ioc-api.db"
         engine = create_engine(
             f"sqlite:///{path}", connect_args={"check_same_thread": False}

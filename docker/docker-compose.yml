@@ -12,9 +12,9 @@ services:
       - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
-      - POSTGRES_USER=vigilantai
-      - POSTGRES_PASSWORD=vigilantai_secret
-      - POSTGRES_DB=vigilantai
+      - POSTGRES_USER=${POSTGRES_USER:-vigilantai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vigilantai_secret}
+      - POSTGRES_DB=${POSTGRES_DB:-vigilantai}
       - USE_SQLITE=false
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -59,9 +59,9 @@ services:
       - ../backend/.env
     environment:
       - POSTGRES_SERVER=db
-      - POSTGRES_USER=vigilantai
-      - POSTGRES_PASSWORD=vigilantai_secret
-      - POSTGRES_DB=vigilantai
+      - POSTGRES_USER=${POSTGRES_USER:-vigilantai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vigilantai_secret}
+      - POSTGRES_DB=${POSTGRES_DB:-vigilantai}
       - USE_SQLITE=false
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -116,13 +116,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=vigilantai
-      - POSTGRES_PASSWORD=vigilantai_secret
-      - POSTGRES_DB=vigilantai
+      - POSTGRES_USER=${POSTGRES_USER:-vigilantai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-vigilantai_secret}
+      - POSTGRES_DB=${POSTGRES_DB:-vigilantai}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vigilantai -d vigilantai"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -146,7 +146,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@vigilantai.com
+      - PGADMIN_DEFAULT_EMAIL=admin@socluma.local
       - PGADMIN_DEFAULT_PASSWORD=admin
     ports:
       - "${PGADMIN_PORT:-5050}:80"

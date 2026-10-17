@@ -37,7 +37,7 @@ export default function AccountSecurity() {
   }
   const downloadCodes = () => {
     const url = URL.createObjectURL(new Blob([recoveryCodes.join('\n')], { type: 'text/plain' }))
-    const link = document.createElement('a'); link.href = url; link.download = 'vigilantai-recovery-codes.txt'; link.click()
+    const link = document.createElement('a'); link.href = url; link.download = 'socluma-recovery-codes.txt'; link.click()
     URL.revokeObjectURL(url)
   }
 

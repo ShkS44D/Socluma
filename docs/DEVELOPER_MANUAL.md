@@ -1,4 +1,4 @@
-# VigilantAI Developer Manual
+# Socluma Developer Manual
 
 For rule schemas, lifecycle transitions, simulation workers, migration 1800, and
 the offline CLI, see [Phase 7 Detection Engineering](PHASE7_DETECTION_ENGINEERING.md).
@@ -19,7 +19,7 @@ Configure versioned encryption and integrity keys as documented in
 
 ## Architecture
 
-VigilantAI consists of a FastAPI/SQLAlchemy backend, React/TypeScript frontend, collector agent, PostgreSQL or SQLite database, optional Redis/Celery workers, and Docker/Nginx deployment definitions. API routers call tenant-aware services; models and Alembic migrations define durable state.
+Socluma consists of a FastAPI/SQLAlchemy backend, React/TypeScript frontend, collector agent, PostgreSQL or SQLite database, optional Redis/Celery workers, and Docker/Nginx deployment definitions. API routers call tenant-aware services; models and Alembic migrations define durable state.
 
 ## Backend and frontend structure
 
@@ -49,9 +49,9 @@ Usage middleware records one atomic counter row per tenant and UTC date. `GET /a
 
 `AuditService` is the single append path and sanitizes keys associated with passwords, PINs, tokens, secrets, API keys, and credentials. Records support UTC time, tenant, actor, actor role, action, resource, outcome, IP, user agent, request ID, safe metadata, and failure reason. Audit APIs are tenant-scoped, permission protected, paginated, searchable, filterable, and date sortable. CSV/JSON exports include all filtered rows and create an audit event. The query helper is the extension point for future archived sources or background exports.
 
-## VigilantAI Copilot
+## Socluma Copilot
 
-VigilantAI Copilot retains compatibility with existing internal AI route and class names. Services build tenant-scoped evidence packages, invoke the configured provider, persist safe artifacts, and audit safe request metadata. Never log prompt secrets or full sensitive payloads.
+Socluma Copilot retains compatibility with existing internal AI route and class names. Services build tenant-scoped evidence packages, invoke the configured provider, persist safe artifacts, and audit safe request metadata. Never log prompt secrets or full sensitive payloads.
 
 ## Collectors, detection, correlation, playbooks, and SOAR
 
@@ -85,7 +85,7 @@ Development and production Compose files are under `docker/`; backend and fronte
 
 ## API documentation
 
-FastAPI publishes OpenAPI documentation from route schemas and descriptions. Preserve existing `/api/v1` compatibility; the legacy internal `incident-copilot` route remains supported while user-facing descriptions use **VigilantAI Copilot**.
+FastAPI publishes OpenAPI documentation from route schemas and descriptions. Preserve existing `/api/v1` compatibility; the legacy internal `incident-copilot` route remains supported while user-facing descriptions use **Socluma Copilot**.
 
 ## Testing
 

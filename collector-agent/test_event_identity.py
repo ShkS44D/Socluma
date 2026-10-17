@@ -1,4 +1,4 @@
-from collector import VigilantAICollector
+from collector import SoclumaCollector
 
 
 def _windows_payload(record_number: int, channel: str = "Security", host: str = "saad-pc"):
@@ -20,8 +20,8 @@ def _windows_payload(record_number: int, channel: str = "Security", host: str = 
 
 
 def test_repeated_windows_event_ids_use_unique_record_identity():
-    first = VigilantAICollector._derive_source_event_id(_windows_payload(1001))
-    second = VigilantAICollector._derive_source_event_id(_windows_payload(1002))
+    first = SoclumaCollector._derive_source_event_id(_windows_payload(1001))
+    second = SoclumaCollector._derive_source_event_id(_windows_payload(1002))
 
     assert first == "windows:saad-pc:Security:1001"
     assert second == "windows:saad-pc:Security:1002"
@@ -29,9 +29,9 @@ def test_repeated_windows_event_ids_use_unique_record_identity():
 
 
 def test_windows_record_identity_includes_channel_and_host():
-    security = VigilantAICollector._derive_source_event_id(_windows_payload(1001, "Security", "saad-pc"))
-    system = VigilantAICollector._derive_source_event_id(_windows_payload(1001, "System", "saad-pc"))
-    other_host = VigilantAICollector._derive_source_event_id(_windows_payload(1001, "Security", "other-pc"))
+    security = SoclumaCollector._derive_source_event_id(_windows_payload(1001, "Security", "saad-pc"))
+    system = SoclumaCollector._derive_source_event_id(_windows_payload(1001, "System", "saad-pc"))
+    other_host = SoclumaCollector._derive_source_event_id(_windows_payload(1001, "Security", "other-pc"))
 
     assert len({security, system, other_host}) == 3
 
@@ -43,4 +43,4 @@ def test_event_kind_is_not_used_as_a_unique_record_id():
         "normalized_event": {"event_id": 4624},
     }
 
-    assert VigilantAICollector._derive_source_event_id(payload) is None
+    assert SoclumaCollector._derive_source_event_id(payload) is None

@@ -6,7 +6,7 @@ Use this order when a rule does not produce an alert:
 
 1. Confirm the source event exists in Windows Event Viewer.
 2. Confirm the collector subscribes to that event's channel.
-3. Confirm the event appears in VigilantAI Events.
+3. Confirm the event appears in Socluma Events.
 4. Open the saved rule and use **Test Rule** with the event JSON.
 5. Review the logsource, resolved fields, selections, and condition.
 6. Check Alerts. A matching rule creates one alert for each event/rule pair.
@@ -81,7 +81,7 @@ and verify the event in the Security channel. Rules can then match `EventID`,
 
 ## Supported Sigma subset
 
-VigilantAI supports:
+Socluma supports:
 
 - YAML or JSON rules with `title`, `logsource`, `detection`, and `condition`
 - exact case-insensitive scalar equality and lists of accepted values
@@ -92,11 +92,11 @@ VigilantAI supports:
 - controlled Windows logsource aliases and nested EventData field resolution
 
 Rules retain metadata such as `id`, `status`, `description`, `author`, dates,
-references, tags, false positives, and level in parsed content. VigilantAI
+references, tags, false positives, and level in parsed content. Socluma
 generates an ID when one is omitted.
 
 Unsupported modifiers, unknown selections, invalid conditions, and unsupported
-logsource keys are rejected when saved. VigilantAI does not claim full Sigma
+logsource keys are rejected when saved. Socluma does not claim full Sigma
 support. Aggregations, Sigma correlation rules, pipelines, and backend-specific
 features outside the list above are unsupported.
 

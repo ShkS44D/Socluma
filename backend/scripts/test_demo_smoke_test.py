@@ -1,4 +1,4 @@
-"""Run the deterministic VigilantAI demo smoke test against a running VigilantAI API."""
+"""Run the deterministic Socluma demo smoke test against a running Socluma API."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def _switch_to_organization(client: httpx.Client, token: str, organization_slug:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default=os.getenv("VIGILANTAI_BASE_URL", "http://127.0.0.1:8001"))
+    parser.add_argument("--base-url", default=os.getenv("SOCLUMA_BASE_URL", "http://127.0.0.1:8001"))
     parser.add_argument("--owner-email", default=os.getenv("TEST_DEMO_OWNER_EMAIL", OWNER_EMAIL_DEFAULT))
     parser.add_argument("--analyst-email", default=os.getenv("TEST_DEMO_ANALYST_EMAIL", ANALYST_EMAIL_DEFAULT))
     parser.add_argument("--organization-slug", default=os.getenv("TEST_DEMO_ORGANIZATION_SLUG", DEMO_SLUG))
@@ -90,7 +90,7 @@ def main() -> int:
     owner_password = os.getenv("TEST_DEMO_OWNER_PASSWORD", "")
     analyst_password = os.getenv("TEST_DEMO_ANALYST_PASSWORD", "")
     if not owner_password or not analyst_password:
-        print("FAIL configuration: VigilantAI demo password environment variables are required")
+        print("FAIL configuration: Socluma demo password environment variables are required")
         return 2
 
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=30, follow_redirects=False) as client:
@@ -155,7 +155,7 @@ def main() -> int:
             if explanation:
                 smoke.check("MITRE progression", lambda: len(explanation.get("mitre_attack_mapping", [])) >= 2 or (_ for _ in ()).throw(RuntimeError("insufficient MITRE stages")))
                 smoke.check("evidence citations", lambda: explanation.get("evidence_summary", {}).get("source_event_count", 0) >= 2 or (_ for _ in ()).throw(RuntimeError("source evidence missing")))
-            fallback = smoke.check("VigilantAI Copilot deterministic fallback", lambda: Smoke.ok(client.post(f"/api/v1/ai/incident/{incident['id']}/summary", headers=analyst, params={"offline": "true"})).json())
+            fallback = smoke.check("Socluma Copilot deterministic fallback", lambda: Smoke.ok(client.post(f"/api/v1/ai/incident/{incident['id']}/summary", headers=analyst, params={"offline": "true"})).json())
             if fallback:
                 smoke.check("fallback disclosure", lambda: fallback["executive_summary"].startswith("Deterministic offline analysis") or (_ for _ in ()).throw(RuntimeError("fallback not labelled")))
 
@@ -183,7 +183,7 @@ def main() -> int:
         if report:
             download = client.get(f"/api/v1/ioc-commercial/reports/{report['id']}/download", headers=owner)
             smoke.check("authenticated report download", lambda: len(Smoke.ok(download).content) or (_ for _ in ()).throw(RuntimeError("empty report")))
-            smoke.check("safe report filename", lambda: download.headers.get("content-disposition", "").startswith("attachment; filename=\"vigilantai-ioc-report-") or (_ for _ in ()).throw(RuntimeError("filename missing")))
+            smoke.check("safe report filename", lambda: download.headers.get("content-disposition", "").startswith("attachment; filename=\"socluma-ioc-report-") or (_ for _ in ()).throw(RuntimeError("filename missing")))
         smoke.check("unauthenticated tenant data denied", lambda: client.get("/api/v1/iocs").status_code in {401, 403} or (_ for _ in ()).throw(RuntimeError("IOC inventory exposed")))
         hidden_id = str(uuid.uuid4())
         smoke.check(

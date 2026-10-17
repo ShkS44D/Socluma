@@ -91,7 +91,7 @@ class SOARFrameworkTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}-{os.urandom(2).hex()}@example.com",
-            hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
+            hashed_password=get_password_hash("Socluma-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )

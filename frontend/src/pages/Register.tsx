@@ -70,7 +70,7 @@ const Register: React.FC = () => {
                 }}
             >
                 <Typography component="h1" variant="h5">
-                    VigilantAI Register
+                    Socluma Register
                 </Typography>
                 <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
                     {error && (

@@ -1,7 +1,7 @@
 # Audit Logging, Retention, and Data Protection
 
 Back up the database and both audit artifact directories before applying migration
-`20260729_1500`. VigilantAI does not claim compliance certification, external SIEM
+`20260729_1500`. Socluma does not claim compliance certification, external SIEM
 archival, cloud object storage, an external secrets manager, or full DLP.
 
 ## Event taxonomy and integrity

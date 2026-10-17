@@ -66,13 +66,13 @@ const DashboardLayout: React.FC = () => {
 
   useEffect(() => {
     setEmailWarningDismissed(
-      Boolean(user?.id && sessionStorage.getItem(`vigilantai-email-warning-dismissed:${user.id}`)),
+      Boolean(user?.id && sessionStorage.getItem(`socluma-email-warning-dismissed:${user.id}`)),
     )
   }, [user?.id])
 
   const dismissEmailWarning = () => {
     if (user?.id) {
-      sessionStorage.setItem(`vigilantai-email-warning-dismissed:${user.id}`, 'true')
+      sessionStorage.setItem(`socluma-email-warning-dismissed:${user.id}`, 'true')
     }
     setEmailWarningDismissed(true)
   }
@@ -85,7 +85,7 @@ const DashboardLayout: React.FC = () => {
       ...(can('search.events') ? [{ text: 'Search', icon: <SearchIcon />, path: '/search', group: 'Investigations' }] : []),
       ...(can('investigations.view') ? [{ text: 'Investigation Workspace', icon: <InvestigationIcon />, path: '/investigations', group: 'Investigations' }] : []),
       ...(can('detections.view') ? [{ text: 'MITRE Matrix', icon: <MatrixIcon />, path: '/mitre-matrix', group: 'Investigations' }] : []),
-      ...(can('triage_ai.use') ? [{ text: 'VigilantAI Copilot', icon: <AIIcon />, path: '/ai', group: 'Investigations' }] : []),
+      ...(can('triage_ai.use') ? [{ text: 'Socluma Copilot', icon: <AIIcon />, path: '/ai', group: 'Investigations' }] : []),
     ]
 
     if (can('alerts.view') || can('incidents.view')) {
@@ -168,8 +168,8 @@ const DashboardLayout: React.FC = () => {
       settings: 'Settings',
       users: 'User Management',
       organizations: 'Organizations',
-      ai: 'VigilantAI Copilot',
-      'incident-copilot': 'VigilantAI Copilot',
+      ai: 'Socluma Copilot',
+      'incident-copilot': 'Socluma Copilot',
       timeline: 'Timeline',
       reports: 'Reports',
       'alert-explanation': 'Alert Explanation',

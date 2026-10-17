@@ -1,4 +1,4 @@
-# VigilantAI Controlled Pilot Scenarios
+# Socluma Controlled Pilot Scenarios
 
 All records use synthetic data and stable `[PILOT]` titles. Run the seed command again to verify that no duplicates are created.
 
@@ -12,4 +12,4 @@ All records use synthetic data and stable `[PILOT]` titles. Run the seed command
 | Manual incident | Manual origin and analyst-added evidence | No fabricated detection or primary alert |
 | Legacy-style incident | Historical provenance limitations | Missing original links stated clearly |
 
-For every scenario, inspect Incident Intelligence, use evidence navigation, ask VigilantAI Copilot "Which facts are confirmed and which are uncertain?", and confirm deterministic fallback remains available. Recommendations must not be presented as completed actions.
+For every scenario, inspect Incident Intelligence, use evidence navigation, ask Socluma Copilot "Which facts are confirmed and which are uncertain?", and confirm deterministic fallback remains available. Recommendations must not be presented as completed actions.

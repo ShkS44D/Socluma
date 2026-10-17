@@ -1,10 +1,10 @@
-# VigilantAI
+# Socluma — AI-Assisted Security Operations
 
-VigilantAI is an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
+Socluma is a personal cybersecurity engineering project: an AI-assisted Security Operations Center (SOC) platform for collecting security telemetry, running detections, investigating alerts and incidents, managing indicators of compromise (IOCs), and coordinating response actions.
 
 The repository contains a FastAPI backend, a React analyst console, a Python collector agent, database migrations, background workers, and Docker configurations for development and production-style deployments.
 
-> **Project status:** VigilantAI is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
+> **Project status:** Socluma is under active development. Review and harden all security, availability, backup, and observability settings before using it with production data.
 
 ## Core capabilities
 
@@ -58,8 +58,8 @@ Docker is the easiest way to run the complete application.
 1. Clone the repository and enter its directory:
 
    ```powershell
-   git clone <private-repository-url>
-   Set-Location VigilantAI
+   git clone https://github.com/ShkS44D/Socluma.git
+   Set-Location Socluma
    ```
 
 2. Create local environment files:
@@ -129,7 +129,7 @@ If PowerShell blocks virtual-environment activation, run the following once for 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-The default local database is `backend/vigilantai.db`. It is runtime data and is excluded from Git.
+The default local database is `backend/socluma.db`. It is runtime data and is excluded from Git.
 
 ### 2. Frontend
 
@@ -157,7 +157,7 @@ Set `USE_REDIS_MOCK=false` and configure `REDIS_HOST` and `REDIS_PORT` first.
 
 ## Collector agent
 
-Create a collector in VigilantAI and securely retain the returned collector ID and one-time token. Then run:
+Create a collector in Socluma and securely retain the returned collector ID and one-time token. Then run:
 
 ```powershell
 Set-Location collector-agent
@@ -243,6 +243,7 @@ python -m pytest -q
 ```powershell
 Set-Location frontend
 npm ci
+npm run test:unit
 npm run lint
 npm run build
 ```
@@ -266,9 +267,9 @@ The production Compose configuration uses PostgreSQL, Redis, a backend worker, n
 Set strong, unique values in the deployment environment:
 
 ```powershell
-$env:POSTGRES_USER="vigilantai"
+$env:POSTGRES_USER="socluma"
 $env:POSTGRES_PASSWORD="<strong-database-password>"
-$env:POSTGRES_DB="vigilantai"
+$env:POSTGRES_DB="socluma"
 $env:SECRET_KEY="<strong-random-secret>"
 $env:JWT_SECRET_KEY="<strong-random-secret>"
 $env:REFRESH_TOKEN_SECRET="<strong-random-secret>"
@@ -294,6 +295,7 @@ Backend logs use structured JSON and include correlation fields such as request,
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
+- [Rename and existing-installation notes](docs/REBRANDING.md)
 - [Windows and Docker run guide](docs/RUN_GUIDE.md)
 - [Authentication](docs/AUTHENTICATION.md)
 - [Authorization model](docs/AUTHORIZATION.md)
@@ -318,4 +320,4 @@ Backend logs use structured JSON and include correlation fields such as request,
 
 ## License
 
-No open-source license is currently included. Unless a license is added, the code remains private and all rights are reserved by the repository owner.
+No license file is currently included.

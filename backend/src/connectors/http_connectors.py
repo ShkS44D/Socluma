@@ -54,7 +54,7 @@ class WebhookConnector(HTTPConnectorMixin, ActionConnectorBase):
 
     def test_connection(self, config: dict[str, Any], credentials: dict[str, Any] | None = None) -> ConnectorResult:
         self.validate(config, credentials)
-        return self._request(config.get("test_method", "POST"), config["url"], json_payload={"type": "vigilantai_test"}, timeout_seconds=10)
+        return self._request(config.get("test_method", "POST"), config["url"], json_payload={"type": "socluma_test"}, timeout_seconds=10)
 
     def health(self, config: dict[str, Any], credentials: dict[str, Any] | None = None) -> ConnectorResult:
         self.validate(config, credentials)
@@ -70,7 +70,7 @@ class SlackConnector(WebhookConnector):
         webhook_url = request.credentials.get("webhook_url") or request.config.get("webhook_url")
         if not webhook_url:
             raise ValueError("Slack connector requires webhook_url in credentials or config")
-        text = request.payload.get("text") or request.payload.get("message") or "VigilantAI notification"
+        text = request.payload.get("text") or request.payload.get("message") or "Socluma notification"
         blocks = request.payload.get("blocks")
         payload: dict[str, Any] = {"text": text}
         if blocks:
@@ -92,7 +92,7 @@ class TeamsConnector(WebhookConnector):
     def execute(self, request: ConnectorRequest) -> ConnectorResult:
         self.validate(request.config, request.credentials)
         webhook_url = request.credentials.get("webhook_url") or request.config.get("webhook_url")
-        title = request.payload.get("title") or "VigilantAI notification"
+        title = request.payload.get("title") or "Socluma notification"
         text = request.payload.get("text") or request.payload.get("message") or title
         payload = {"@type": "MessageCard", "@context": "https://schema.org/extensions", "summary": title, "title": title, "text": text}
         return self._request("POST", webhook_url, json_payload=payload, timeout_seconds=request.timeout_seconds)

@@ -1,0 +1,22 @@
+[Unit]
+Description=Socluma — AI-Assisted Security Operations Telemetry Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=socluma-collector
+Group=socluma-collector
+WorkingDirectory=/opt/socluma-collector
+EnvironmentFile=/etc/socluma-collector.env
+ExecStart=/opt/socluma-collector/venv/bin/python main.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/socluma-collector
+
+[Install]
+WantedBy=multi-user.target

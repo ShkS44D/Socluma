@@ -293,7 +293,7 @@ def legacy_stream_export(
     return Response(
         render_json() if format == "json" else render_csv(),
         media_type="application/json" if format == "json" else "text/csv",
-        headers={"Content-Disposition": f'attachment; filename="vigilantai-audit.{extension}"',
+        headers={"Content-Disposition": f'attachment; filename="socluma-audit.{extension}"',
                  "X-Content-Type-Options": "nosniff"},
     )
 
@@ -348,7 +348,7 @@ def download_export(
                          details={"format": job.format})
     return Response(
         payload, media_type=content_types[job.format],
-        headers={"Content-Disposition": f'attachment; filename="vigilantai-audit-{job.id}.{extension}"',
+        headers={"Content-Disposition": f'attachment; filename="socluma-audit-{job.id}.{extension}"',
                  "X-Content-Type-Options": "nosniff"},
     )
 

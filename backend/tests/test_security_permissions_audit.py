@@ -24,7 +24,7 @@ def test_pin_custom_roles_and_tenant_scoped_audit_export():
     db.add_all([tenant, other])
     db.flush()
     owner = User(tenant_id=tenant.id, email="owner-security@example.com",
-                 hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"), role=UserRole.ADMIN)
+                 hashed_password=get_password_hash("Socluma-Test-Passphrase-2026!"), role=UserRole.ADMIN)
     db.add(owner)
     db.flush()
     db.add(OrganizationMembership(tenant_id=tenant.id, user_id=owner.id, role=OrganizationRole.OWNER))
@@ -52,7 +52,7 @@ def test_pin_custom_roles_and_tenant_scoped_audit_export():
     try:
         pin_response = client.put(
             f"/api/v1/organizations/{tenant_id}/deletion-pin",
-            json={"pin": "1234", "current_password": "VigilantAI-Test-Passphrase-2026!"},
+            json={"pin": "1234", "current_password": "Socluma-Test-Passphrase-2026!"},
         )
         assert pin_response.status_code == 204, pin_response.text
         role_response = client.post(

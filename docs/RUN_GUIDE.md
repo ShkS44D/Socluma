@@ -1,4 +1,4 @@
-# VigilantAI Windows Run Guide
+# Socluma Windows Run Guide
 
 ## Requirements
 
@@ -10,7 +10,7 @@
 Run all Docker commands from the repository root:
 
 ```powershell
-Set-Location "D:\AI SOC Assistent (NL)"
+Set-Location "D:\Socluma"
 if (!(Test-Path backend\.env)) { Copy-Item backend\.env.example backend\.env }
 if (!(Test-Path frontend\.env)) { Copy-Item frontend\.env.example frontend\.env }
 ```
@@ -64,7 +64,7 @@ docker compose -f docker\docker-compose.yml exec -T `
   backend python scripts/test_demo_smoke_test.py --base-url http://127.0.0.1:8000
 ```
 
-Reset only the reserved `VigilantAI Demo` tenant and recreate its deterministic data:
+Reset only the reserved `Socluma Demo` tenant and recreate its deterministic data:
 
 ```powershell
 docker compose -f docker\docker-compose.yml exec -T `
@@ -90,10 +90,10 @@ Remove-Item Env:TEST_DEMO_ANALYST_PASSWORD -ErrorAction SilentlyContinue
 
 ## Windows collector
 
-Create a collector in VigilantAI and store the returned one-time token in an approved local secret store. In a new PowerShell window:
+Create a collector in Socluma and store the returned one-time token in an approved local secret store. In a new PowerShell window:
 
 ```powershell
-Set-Location "D:\AI SOC Assistent (NL)\collector-agent"
+Set-Location "D:\Socluma\collector-agent"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -108,20 +108,20 @@ Use an HTTPS backend URL outside local development. The account running the coll
 ## Release checks
 
 ```powershell
-Set-Location "D:\AI SOC Assistent (NL)"
+Set-Location "D:\Socluma"
 python -m pip install -r backend\requirements-test.txt
-$env:PYTHONPATH="D:\AI SOC Assistent (NL)\backend"
-$env:PYTHONPYCACHEPREFIX="D:\AI SOC Assistent (NL)\tmp\release-pycache"
-New-Item -ItemType Directory -Force "D:\AI SOC Assistent (NL)\tmp\release-test-cwd" | Out-Null
-Push-Location "D:\AI SOC Assistent (NL)\tmp\release-test-cwd"
-python -m pytest "D:\AI SOC Assistent (NL)\backend\tests" -q --rootdir="D:\AI SOC Assistent (NL)"
+$env:PYTHONPATH="D:\Socluma\backend"
+$env:PYTHONPYCACHEPREFIX="D:\Socluma\tmp\release-pycache"
+New-Item -ItemType Directory -Force "D:\Socluma\tmp\release-test-cwd" | Out-Null
+Push-Location "D:\Socluma\tmp\release-test-cwd"
+python -m pytest "D:\Socluma\backend\tests" -q --rootdir="D:\Socluma"
 Pop-Location
 
-Set-Location "D:\AI SOC Assistent (NL)\collector-agent"
-$env:PYTHONPATH="D:\AI SOC Assistent (NL)\backend;D:\AI SOC Assistent (NL)\collector-agent"
+Set-Location "D:\Socluma\collector-agent"
+$env:PYTHONPATH="D:\Socluma\backend;D:\Socluma\collector-agent"
 python -m pytest -q test_batch_signing.py test_event_identity.py test_spool_state.py test_windows_collector.py
 
-Set-Location "D:\AI SOC Assistent (NL)\frontend"
+Set-Location "D:\Socluma\frontend"
 npm ci
 npm run lint
 npm run build
@@ -134,7 +134,7 @@ Backend and frontend local development are supported. Use separate PowerShell wi
 Backend with SQLite:
 
 ```powershell
-Set-Location "D:\AI SOC Assistent (NL)\backend"
+Set-Location "D:\Socluma\backend"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -148,7 +148,7 @@ python -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8001
 Frontend:
 
 ```powershell
-Set-Location "D:\AI SOC Assistent (NL)\frontend"
+Set-Location "D:\Socluma\frontend"
 npm ci
 $env:VITE_API_BASE_URL="http://localhost:8001"
 npm run dev

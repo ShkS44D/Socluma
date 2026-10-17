@@ -1,8 +1,8 @@
 
-# VigilantAI Backend Startup Script
+# Socluma Backend Startup Script
 # Ensures backend always starts on port 8001 by cleaning up any existing process first
 
-Write-Host "=== VigilantAI Backend Startup ===" -ForegroundColor Cyan
+Write-Host "=== Socluma Backend Startup ===" -ForegroundColor Cyan
 
 $PORT = 8001
 

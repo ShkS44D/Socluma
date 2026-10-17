@@ -1,4 +1,6 @@
-# VigilantAI MVP Architecture & Implementation Roadmap
+# Archived MVP Architecture & Implementation Roadmap
+
+This document preserves early planning history. Technology selections and implementation instructions below are superseded by the current [architecture](../../ARCHITECTURE.md) and [README](../../README.md).
 
 ## 1. MVP Scope Definition
 
@@ -59,7 +61,7 @@
 ## 3. MVP Folder Structure
 
 ```
-vigilantai/
+socluma/
 ├── backend/
 │   ├── src/
 │   │   ├── api/

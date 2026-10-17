@@ -29,7 +29,7 @@ class SMTPEmailConnector(ActionConnectorBase):
         message = EmailMessage()
         message["From"] = request.config["from_address"]
         message["To"] = ", ".join(recipients)
-        message["Subject"] = payload.get("subject") or "VigilantAI notification"
+        message["Subject"] = payload.get("subject") or "Socluma notification"
         message.set_content(payload.get("body") or payload.get("message") or "")
 
         port = int(request.config.get("port", 587))

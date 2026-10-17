@@ -54,7 +54,7 @@ test.describe('Incident intelligence browser regression', () => {
       if (message.type() === 'error') pageErrors.push(message.text())
     })
     await login(page)
-    await page.evaluate(() => window.dispatchEvent(new Event('vigilantai:auth-logout')))
+    await page.evaluate(() => window.dispatchEvent(new Event('socluma:auth-logout')))
     await expect(page).toHaveURL(/\/login$/)
     expect(pageErrors).toEqual([])
   })

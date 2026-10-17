@@ -1,4 +1,4 @@
-"""Build VigilantAI' pinned catalog subset from an official Enterprise ATT&CK STIX bundle."""
+"""Build Socluma' pinned catalog subset from an official Enterprise ATT&CK STIX bundle."""
 
 from __future__ import annotations
 

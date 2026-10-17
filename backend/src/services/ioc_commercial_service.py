@@ -487,7 +487,7 @@ class IOCCommercialService:
         ).limit(self.settings.MISP_SYNC_MAX_OBJECTS).all()
         exported = 0
         for ioc in rows:
-            body = {"value": ioc.normalized_value, "type": self._misp_export_type(ioc.type.value), "to_ids": True, "comment": "Exported by VigilantAI"}
+            body = {"value": ioc.normalized_value, "type": self._misp_export_type(ioc.type.value), "to_ids": True, "comment": "Exported by Socluma"}
             response = self.safe_request("POST", f"{config.api_root.rstrip('/')}/attributes/add", headers=self._source_headers(credential, secret), json_body=body)
             if response.status_code < 400:
                 exported += 1
@@ -1107,12 +1107,12 @@ class IOCCommercialService:
         if format_name == "jsonl":
             return ("\n".join(json.dumps(item, sort_keys=True, default=str) for item in records) + "\n").encode()
         if format_name in {"markdown", "html"}:
-            title = "# VigilantAI IOC Intelligence Report\n\n"
+            title = "# Socluma IOC Intelligence Report\n\n"
             body = "\n".join(f"- {item['type']} `{item['value']}` — risk {item['risk_score']}, {item['sightings']} sightings" for item in records)
             text = title + body
             return (f"<html><body><pre>{html.escape(text)}</pre></body></html>" if format_name == "html" else text).encode()
         if format_name == "zip":
-            manifest = json.dumps({"format": "vigilantai-evidence", "row_count": len(records)}, sort_keys=True).encode()
+            manifest = json.dumps({"format": "socluma-evidence", "row_count": len(records)}, sort_keys=True).encode()
             data = json.dumps({"items": records}, sort_keys=True, default=str).encode()
             output = io.BytesIO()
             with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:

@@ -43,7 +43,7 @@ const OrganizationUsage: React.FC = () => {
         <Grid item xs={12} md={4}><MetricCard title="Playbooks" value={usage.playbook_count} icon={<MetricIcon />} /></Grid>
         <Grid item xs={12} md={4}><MetricCard title="SOAR Executions" value={usage.soar_execution_count} icon={<MetricIcon />} /></Grid>
         <Grid item xs={12} md={4}><MetricCard title="Playbook Executions" value={usage.playbook_execution_count} icon={<MetricIcon />} /></Grid>
-        <Grid item xs={12} md={4}><MetricCard title="VigilantAI Copilot Requests" value={usage.triage_ai_request_count} icon={<MetricIcon />} /></Grid>
+        <Grid item xs={12} md={4}><MetricCard title="Socluma Copilot Requests" value={usage.triage_ai_request_count} icon={<MetricIcon />} /></Grid>
         <Grid item xs={12} md={4}><MetricCard title="API Requests" value={usage.api_request_count} icon={<MetricIcon />} /></Grid>
       </Grid>
     </Box>

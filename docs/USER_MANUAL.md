@@ -1,4 +1,4 @@
-# VigilantAI User Manual
+# Socluma User Manual
 
 For version history, reviews, tests, simulation, exceptions, maintenance windows,
 ATT&CK coverage, and content packs, see
@@ -14,16 +14,16 @@ Authorized users can open **Audit Logs** to filter historical events and inspect
 actor, action, resource, severity, result, request IDs, and safe before/after data.
 The other tabs verify chain integrity, edit retention, manage legal holds, and
 request CSV, JSONL, or evidence-package exports. A failed integrity check requires
-investigation; VigilantAI never automatically repairs it. Downloads expire and
+investigation; Socluma never automatically repairs it. Downloads expire and
 require the authorization issued with the export job.
 
 ## Introduction
 
-VigilantAI is a tenant-isolated SOC platform for collecting telemetry, triaging alerts, managing incidents, running detections and response automation, and using VigilantAI Copilot for evidence-grounded investigation support.
+Socluma is a tenant-isolated SOC platform for collecting telemetry, triaging alerts, managing incidents, running detections and response automation, and using Socluma Copilot for evidence-grounded investigation support.
 
 ## Login and account access
 
-1. Open the VigilantAI sign-in page.
+1. Open the Socluma sign-in page.
 2. Enter your organization email and password.
 3. Select **Sign In**. Repeated failures can temporarily lock the account.
 4. Use the organization switcher when you belong to multiple organizations. Access and data change with the selected organization.
@@ -47,9 +47,9 @@ The Dashboard summarizes current alert volume, incidents, severity, and recent a
 
 Open **Detection Rules** to inspect, create, test, enable, or disable rules when your assigned permissions allow it. Sigma rules use the same tenant boundary and should be tested against representative telemetry before activation.
 
-## VigilantAI Copilot
+## Socluma Copilot
 
-Open **VigilantAI Copilot** from Investigations. Choose an incident or supported artifact, ask a focused question, and verify responses against cited tenant evidence. Do not submit passwords, tokens, keys, or unrelated personal information.
+Open **Socluma Copilot** from Investigations. Choose an incident or supported artifact, ask a focused question, and verify responses against cited tenant evidence. Do not submit passwords, tokens, keys, or unrelated personal information.
 
 ## Playbooks and SOAR connectors
 
@@ -85,7 +85,7 @@ creation; store them securely and revoke them when no longer needed.
 
 ## Understanding usage
 
-The Usage page shows current tenant-scoped counts for active users, collectors, stored events, alerts, incidents, playbook definitions and executions, SOAR actions, VigilantAI Copilot requests, and API requests. API request totals use the active UTC month and exclude health, metrics, API documentation, and static documentation traffic. “Application Payload Storage (estimate)” measures persisted event and alert JSON plus incident text; it is not the server's disk usage.
+The Usage page shows current tenant-scoped counts for active users, collectors, stored events, alerts, incidents, playbook definitions and executions, SOAR actions, Socluma Copilot requests, and API requests. API request totals use the active UTC month and exclude health, metrics, API documentation, and static documentation traffic. “Application Payload Storage (estimate)” measures persisted event and alert JSON plus incident text; it is not the server's disk usage.
 
 Five failed verification attempts trigger a temporary 15-minute lock. If the PIN is forgotten, an owner can reset it with their current password. Deletion disables the organization and access to its tenant data; follow your retention and backup procedures before confirming.
 
@@ -99,8 +99,8 @@ Open **Audit Logs** to search historical activity, filter by status and other su
 - **Account locked:** wait for the lock period or contact an owner.
 - **No telemetry:** verify collector status and its log source configuration.
 - **Playbook action failed:** review execution history and connector health.
-- **VigilantAI Copilot unavailable:** continue the investigation with stored evidence and ask an administrator to check provider configuration.
+- **Socluma Copilot unavailable:** continue the investigation with stored evidence and ask an administrator to check provider configuration.
 
 ## Security best practices
 
-Use a unique password, protect the deletion PIN separately, grant least privilege, keep at least two trusted owners, review audit logs and exports, rotate connector credentials, validate VigilantAI Copilot output, and never paste secrets into notes, prompts, or support requests.
+Use a unique password, protect the deletion PIN separately, grant least privilege, keep at least two trusted owners, review audit logs and exports, rotate connector credentials, validate Socluma Copilot output, and never paste secrets into notes, prompts, or support requests.

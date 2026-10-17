@@ -46,16 +46,16 @@ class AuthEmailService:
         safe = escape(link, quote=True)
         self.send(
             recipient=recipient,
-            subject="Verify your VigilantAI email",
+            subject="Verify your Socluma email",
             text=f"Verify your email: {link}",
-            html=f"<p>Verify your VigilantAI email:</p><p><a href=\"{safe}\">Verify email</a></p>",
+            html=f"<p>Verify your Socluma email:</p><p><a href=\"{safe}\">Verify email</a></p>",
         )
 
     def password_reset(self, recipient: str, link: str) -> None:
         safe = escape(link, quote=True)
         self.send(
             recipient=recipient,
-            subject="Reset your VigilantAI password",
+            subject="Reset your Socluma password",
             text=f"Reset your password: {link}",
             html=f"<p>A password reset was requested.</p><p><a href=\"{safe}\">Reset password</a></p>",
         )
@@ -63,7 +63,7 @@ class AuthEmailService:
     def security_notice(self, recipient: str, title: str, message: str) -> None:
         self.send(
             recipient=recipient,
-            subject=self._safe_header(f"VigilantAI security notice: {title}"),
+            subject=self._safe_header(f"Socluma security notice: {title}"),
             text=message,
             html=f"<p>{escape(message)}</p>",
         )

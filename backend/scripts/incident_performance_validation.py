@@ -71,7 +71,7 @@ def percentile(values: list[float], percentage: float) -> float:
 @contextmanager
 def validation_database(database_url: str | None):
     if not database_url:
-        handle, database_path = tempfile.mkstemp(prefix="vigilantai-batch63-", suffix=".db")
+        handle, database_path = tempfile.mkstemp(prefix="socluma-batch63-", suffix=".db")
         os.close(handle)
         engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
         target = {"dialect": "sqlite", "host": "local", "database": database_path, "schema": None}
@@ -418,7 +418,7 @@ def verify_copilot_idempotency(
         completed = next((response for response in initial_responses if response.status_code == 200), None)
         if completed is None:
             raise RuntimeError(
-                f"No idempotent VigilantAI Copilot caller completed: {[item.status_code for item in initial_responses]}"
+                f"No idempotent Socluma Copilot caller completed: {[item.status_code for item in initial_responses]}"
             )
         completed_body = completed.json()
         attempts_after_initial = provider_attempts

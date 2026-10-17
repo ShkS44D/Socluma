@@ -1,6 +1,6 @@
-# Incident Intelligence and VigilantAI Copilot
+# Incident Intelligence and Socluma Copilot
 
-This document describes the implemented incident provenance and incident-scoped AI behavior in VigilantAI.
+This document describes the implemented incident provenance and incident-scoped AI behavior in Socluma.
 
 ## Correlation-driven lifecycle
 
@@ -22,7 +22,7 @@ Troubleshooting: pending alerts are expected until a qualifying peer arrives. If
 
 ## Authoritative ATT&CK catalog and simulation acceptance
 
-VigilantAI carries an offline, reproducible subset generated from the official MITRE ATT&CK Enterprise STIX 2.1 release `v18.1` (`mitre-attack/attack-stix-data`, source SHA-256 `f857d8f78f2f0c0b7db321a711a39fba98546c1e3076a657684850c83d0962fb`). The checked-in JSON contains every technique referenced by enabled built-in rules, pilot fixtures, and the full-chain scenario, plus required parents. It records all applicable tactics and their Enterprise matrix order, parent/sub-technique separation, descriptions, revoked/deprecated state, source version, and authoritative ATT&CK URL. Unknown IDs remain visibly unresolved and generate a safe metadata warning; they are never assigned a guessed tactic.
+Socluma carries an offline, reproducible subset generated from the official MITRE ATT&CK Enterprise STIX 2.1 release `v18.1` (`mitre-attack/attack-stix-data`, source SHA-256 `f857d8f78f2f0c0b7db321a711a39fba98546c1e3076a657684850c83d0962fb`). The checked-in JSON contains every technique referenced by enabled built-in rules, pilot fixtures, and the full-chain scenario, plus required parents. It records all applicable tactics and their Enterprise matrix order, parent/sub-technique separation, descriptions, revoked/deprecated state, source version, and authoritative ATT&CK URL. Unknown IDs remain visibly unresolved and generate a safe metadata warning; they are never assigned a guessed tactic.
 
 Synchronize the shared reference catalog after migrations:
 
@@ -66,7 +66,7 @@ flowchart LR
     Alert --> Correlation["Tenant-scoped correlation"]
     Correlation --> Incident["Incident"]
     Incident --> Explanation["Deterministic explanation"]
-    Explanation --> VigilantAI Copilot["Grounded VigilantAI Copilot context"]
+    Explanation --> Socluma Copilot["Grounded Socluma Copilot context"]
 ```
 
 ## Explanation API
@@ -91,9 +91,9 @@ Large alert and event collections are bounded by validated query limits. Existin
 
 The official risk score is deterministic. It combines base severity (low 10, medium 20, high 30, critical 40), bounded multiple-alert, suspicious-behavior, threat-intelligence, asset-criticality, MITRE-impact, and analyst-feedback factors. The breakdown includes the uncapped total and any bounding adjustment, so its numeric components always reconcile to the final 0-100 score. AI output cannot change the official score.
 
-## VigilantAI Copilot Data Access
+## Socluma Copilot Data Access
 
-The VigilantAI Copilot may read only controlled views of the current incident:
+The Socluma Copilot may read only controlled views of the current incident:
 
 - Summary and origin.
 - Related alerts and source events.
@@ -110,7 +110,7 @@ Every answer returns an answer, evidence references, confidence, limitations, su
 
 Conversation records belong to one tenant, incident, and user. Other users cannot retrieve that history through the conversation APIs. Prompts are size-bounded. Event payloads, alert text, IOC values, analyst questions, conversation history, and notes are structurally separated as untrusted content from provider system instructions. Sensitive dictionary fields and inline credential assignments are redacted, and common instruction-override phrases are neutralized before provider submission.
 
-If OpenAI is unavailable, invalid, timed out, rate limited, or over quota, VigilantAI returns deterministic analysis from the same authorized evidence. The response identifies the local fallback provider and retains citations and limitations.
+If OpenAI is unavailable, invalid, timed out, rate limited, or over quota, Socluma returns deterministic analysis from the same authorized evidence. The response identifies the local fallback provider and retains citations and limitations.
 
 ## Environment
 
@@ -126,9 +126,9 @@ No additional environment variables are required for incident provenance or dete
 2. Open the generated incident and review **How This Incident Was Created**.
 3. Follow the displayed event, rule, alert, correlation, and incident chain.
 4. Review the primary alert, correlated alerts, entities, IOCs, risk factors, MITRE mapping, evidence, and limitations.
-5. Select **Open VigilantAI Copilot** and ask: `Why was this incident created?`
+5. Select **Open Socluma Copilot** and ask: `Why was this incident created?`
 6. Open the cited alert or event below the answer.
 7. Ask: `Which evidence supports the severity?` and `What should I investigate next?`
 8. Temporarily omit `OPENAI_API_KEY` in a development environment to demonstrate that deterministic fallback analysis remains available.
 
-The VigilantAI Copilot enhances the deterministic explanation; it does not replace or alter the underlying incident evidence.
+The Socluma Copilot enhances the deterministic explanation; it does not replace or alter the underlying incident evidence.

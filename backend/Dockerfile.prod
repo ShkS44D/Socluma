@@ -23,15 +23,15 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system vigilantai \
-    && useradd --system --gid vigilantai --home-dir /app vigilantai
+    && groupadd --system socluma \
+    && useradd --system --gid socluma --home-dir /app socluma
 
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
-COPY --chown=vigilantai:vigilantai . .
+COPY --chown=socluma:socluma . .
 
-USER vigilantai
+USER socluma
 
 EXPOSE 8000
 

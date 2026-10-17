@@ -1,4 +1,4 @@
-"""Safely reset only the reserved VigilantAI demonstration organization."""
+"""Safely reset only the reserved Socluma demonstration organization."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def reset(
 ) -> dict:
     settings = get_settings()
     if settings.ENVIRONMENT.casefold() in {"production", "prod"}:
-        raise RuntimeError("VigilantAI demo reset is disabled in production")
+        raise RuntimeError("Socluma demo reset is disabled in production")
     if not confirmed:
         raise RuntimeError("Reset not confirmed; pass --confirm-test-demo-reset")
     db = session_factory()
@@ -101,7 +101,7 @@ def main() -> int:
         owner_email=os.getenv("TEST_DEMO_OWNER_EMAIL", OWNER_EMAIL_DEFAULT),
         analyst_email=os.getenv("TEST_DEMO_ANALYST_EMAIL", ANALYST_EMAIL_DEFAULT),
     )
-    print(f"VigilantAI demo reset complete; recreated tenant {result['tenant_id']}")
+    print(f"Socluma demo reset complete; recreated tenant {result['tenant_id']}")
     print(f"Removed prior demo tenant: {result['reset_removed_existing']}")
     return 0
 

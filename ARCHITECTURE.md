@@ -1,4 +1,4 @@
-# VigilantAI Architecture
+# Socluma Architecture
 
 Phase 7 separates stable detection identities from immutable content versions.
 Only an explicit production version executes; matches retain exact version/hash
@@ -31,7 +31,7 @@ This document describes the architecture implemented in the current repository. 
 
 ## System Overview
 
-VigilantAI is a modular SOC operations platform made of four runtime areas:
+Socluma is a modular SOC operations platform made of four runtime areas:
 
 - Backend API and worker.
 - React analyst frontend.
@@ -202,14 +202,14 @@ In production-style deployments, SOAR actions are queued to Celery and processed
 
 WebSocket connections are tracked per tenant, cleaned up on send failures, and receive heartbeat messages after the configured idle interval. The in-memory connection manager is intentionally isolated behind a service boundary so Redis Pub/Sub can be added later without changing API routes.
 
-## VigilantAI Copilot Architecture
+## Socluma Copilot Architecture
 
-VigilantAI Copilot is implemented as a tenant-aware investigation service, not a general chatbot. API routes under `/api/v1/ai` require authenticated users with analyst-level roles and resolve organization scope from the authenticated session.
+Socluma Copilot is implemented as a tenant-aware investigation service, not a general chatbot. API routes under `/api/v1/ai` require authenticated users with analyst-level roles and resolve organization scope from the authenticated session.
 
 Core service objects:
 
 - `IncidentIntelligenceService`: creates and explains the event-to-rule-to-alert-to-incident provenance chain, alert contributions, entity lineage, evidence references, correlation context, and deterministic risk explanation.
-- The incident-scoped VigilantAI Copilot context builder exposes bounded, read-only, tenant-scoped views for incident summary, origin, alerts, events, detection matches, timeline, entities, IOCs, risk, MITRE mapping, notes, and audit history.
+- The incident-scoped Socluma Copilot context builder exposes bounded, read-only, tenant-scoped views for incident summary, origin, alerts, events, detection matches, timeline, entities, IOCs, risk, MITRE mapping, notes, and audit history.
 - `ContextBuilder`: remains available for non-conversational AI artifacts that use broader tenant investigation context.
 - `PromptBuilder`: redacts sensitive fields, filters common prompt-injection phrases from telemetry/comments, bounds prompt size, and emits structured JSON prompts.
 - `TimelineBuilder`: creates chronological incident timelines from stored evidence and response activity.
@@ -222,9 +222,9 @@ Incident provenance is persisted only where history would otherwise be lost: cre
 
 New detection and Playbook incidents are marked with recorded provenance. Direct ORM-created incidents default to manual provenance. Pre-tracking incidents are marked `legacy_derived`; dynamically reconstructed entities and timestamps are identified as derived, and unavailable historical correlation reasons are not fabricated. The detection alert that creates an incident is the deterministic primary alert for all APIs.
 
-Generated summaries, explanations, IOC analysis, timelines, reports, detection suggestions, and playbook suggestions are stored as AI investigation artifacts. VigilantAI Copilot chat messages are persisted separately so analysts can continue an incident-scoped conversation without exposing cross-tenant data.
+Generated summaries, explanations, IOC analysis, timelines, reports, detection suggestions, and playbook suggestions are stored as AI investigation artifacts. Socluma Copilot chat messages are persisted separately so analysts can continue an incident-scoped conversation without exposing cross-tenant data.
 
-VigilantAI Copilot writes are idempotent. A client request ID is bound to the tenant, user, incident, conversation, and normalized question fingerprint. Redis coordinates in-flight requests across workers; a bounded process-local lock preserves retry safety when Redis is unavailable. While the first request is running, matching callers receive a conflict response. Once complete, authorized retries replay the persisted answer. Scope or fingerprint mismatches are rejected, provider failures leave no partial conversation pair, and failed requests release their lock for a safe retry.
+Socluma Copilot writes are idempotent. A client request ID is bound to the tenant, user, incident, conversation, and normalized question fingerprint. Redis coordinates in-flight requests across workers; a bounded process-local lock preserves retry safety when Redis is unavailable. While the first request is running, matching callers receive a conflict response. Once complete, authorized retries replay the persisted answer. Scope or fingerprint mismatches are rejected, provider failures leave no partial conversation pair, and failed requests release their lock for a safe retry.
 
 ```mermaid
 sequenceDiagram
@@ -236,7 +236,7 @@ sequenceDiagram
     participant LLM as OpenAI Provider
     participant Audit
 
-    Analyst->>Frontend: Request incident summary or VigilantAI Copilot answer
+    Analyst->>Frontend: Request incident summary or Socluma Copilot answer
     Frontend->>API: POST /api/v1/ai/... with access token
     API->>API: Enforce RBAC and active organization
     API->>Service: Generate tenant-scoped AI result
@@ -250,7 +250,7 @@ sequenceDiagram
     API-->>Frontend: Return structured AI response
 ```
 
-OpenAI receives a bounded structured prompt, not an unrestricted database dump. The VigilantAI Copilot context builder applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. VigilantAI Copilot cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When OpenAI is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
+OpenAI receives a bounded structured prompt, not an unrestricted database dump. The Socluma Copilot context builder applies configurable collection limits, deterministic evidence ranking, deduplication, and a final serialized byte budget. Lower-priority collections are omitted before incident-origin, primary-alert, and evidence-reference facts. JSON is compacted as complete objects and is never truncated into invalid structures. Telemetry and analyst text are treated as untrusted content, credential-shaped values are redacted, and prompt-injection phrases are neutralized. Socluma Copilot cannot run SQL, Python, shell commands, playbooks, SOAR actions, containment, or incident state changes. When OpenAI is not configured or unavailable, the service returns deterministic fallback analysis with the same evidence references and limitations.
 
 Evidence-reference navigation is backend-authoritative. The frontend resolves each reference through the tenant-scoped incident evidence API before navigating. Deleted or unsupported evidence returns a safe not-found response, and a reference from another tenant cannot be resolved even when its identifier is known.
 
@@ -273,7 +273,7 @@ The migration check compares `alembic_version` with the repository's single curr
 
 Organization deletion is a state machine: `active` -> `pending_deletion` -> `deleted`, with cancellation returning `pending_deletion` to `active`. The transition to pending requires the owner PIN and disables normal user, collector, session, and API access. A configurable UTC purge time is stored on the organization. The idempotent purge service deletes tenant-owned operational rows in dependency order, disables primary users, clears PIN material, and retains the tenant tombstone plus audit evidence.
 
-`organization_usage` stores one concurrency-safe aggregate per tenant and UTC date. Current resource counts are tenant-scoped indexed SQL counts; request middleware atomically increments API and VigilantAI Copilot counters. Storage is a SQL aggregate of managed application payload lengths and does not represent infrastructure disk allocation.
+`organization_usage` stores one concurrency-safe aggregate per tenant and UTC date. Current resource counts are tenant-scoped indexed SQL counts; request middleware atomically increments API and Socluma Copilot counters. Storage is a SQL aggregate of managed application payload lengths and does not represent infrastructure disk allocation.
 
 ## Frontend
 
@@ -291,7 +291,7 @@ Implemented areas include:
 - Log sources and collectors.
 - Playbooks.
 - SOAR connectors, credentials, action history, and execution detail views.
-- VigilantAI Copilot dashboard, incident-scoped chat, AI reports, timeline viewer, alert explanations, IOC analysis, detection suggestions, and playbook suggestions.
+- Socluma Copilot dashboard, incident-scoped chat, AI reports, timeline viewer, alert explanations, IOC analysis, detection suggestions, and playbook suggestions.
 - WebSocket-driven live updates.
 - Password change UI.
 

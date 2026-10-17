@@ -3,7 +3,7 @@
 ## Initial migration plan
 
 1. Preserve Git and secret safety, then inventory every active and historical Gemini reference.
-2. Replace configuration, dependencies, provider calls, error mapping, health metadata, tests, UI labels, and documentation with OpenAI Responses API equivalents while preserving the current VigilantAI Copilot contract and deterministic fallback.
+2. Replace configuration, dependencies, provider calls, error mapping, health metadata, tests, UI labels, and documentation with OpenAI Responses API equivalents while preserving the current Socluma Copilot contract and deterministic fallback.
 3. Verify schema compatibility for new `openai` records and historical `gemini` records; add a migration only if the database constrains provider values.
 4. Run automated backend, collector, frontend, migration, browser, and container checks before any live request.
 5. Recreate backend and worker, perform at most one controlled OpenAI availability request, and continue grounding evaluation only if that request succeeds.
@@ -20,9 +20,9 @@
 ## Final implementation state
 
 - Active provider: OpenAI Responses API through the official `openai==2.45.0` SDK.
-- VigilantAI Copilot output: Pydantic Structured Output with server-side evidence validation and backend-generated navigation metadata.
+- Socluma Copilot output: Pydantic Structured Output with server-side evidence validation and backend-generated navigation metadata.
 - Request controls: configured model, medium reasoning, 2,000 output-token cap, 60-second timeout, `store=False`, no tools, and SDK retries disabled.
-- Fallback: `vigilantai-deterministic-v1` preserved for missing configuration and all classified provider/structured-output/evidence failures.
+- Fallback: `socluma-deterministic-v1` preserved for missing configuration and all classified provider/structured-output/evidence failures.
 - Database: no migration required; provider/model audit data is stored in unconstrained strings/JSON, so historical Gemini values remain readable.
 - Remaining Gemini text: archived pre-migration validation, this migration log, and tests/UI compatibility for historical records only.
 - Git: no commit, merge, or push performed.
@@ -65,7 +65,7 @@ docker compose -f docker-compose.yml up -d --build db redis backend worker front
 docker compose -f docker-compose.yml exec -T backend alembic current
 docker compose -f docker-compose.yml exec -T worker celery -A src.workers.celery_app.celery_app inspect ping
 docker compose -f docker-compose.yml exec -T redis redis-cli ping
-docker compose -f docker-compose.yml exec -T db pg_isready -U vigilantai -d vigilantai
+docker compose -f docker-compose.yml exec -T db pg_isready -U socluma -d socluma
 git diff --check
 git diff --stat
 ```

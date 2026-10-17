@@ -708,4 +708,4 @@ def download_report(
     payload = decrypt_bytes(encrypted)
     audit_service.record(db, action="ioc_report_downloaded", user=user, resource_type="ioc_report_job", resource_id=row.id, ip_address=_ip(request), details={"checksum": row.checksum})
     media = {"csv": "text/csv", "json": "application/json", "jsonl": "application/x-ndjson", "markdown": "text/markdown", "html": "text/html"}.get(row.format, "application/octet-stream")
-    return Response(payload, media_type=media, headers={"Content-Disposition": f'attachment; filename="vigilantai-ioc-report-{row.id}.{row.format}"', "X-Content-SHA256": row.checksum or ""})
+    return Response(payload, media_type=media, headers={"Content-Disposition": f'attachment; filename="socluma-ioc-report-{row.id}.{row.format}"', "X-Content-SHA256": row.checksum or ""})

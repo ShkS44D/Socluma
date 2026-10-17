@@ -56,7 +56,7 @@ def test_authenticated_report_download_states_and_tenant_isolation(monkeypatch, 
         response = client.get(f"/api/v1/ioc-commercial/reports/{report_id}/download")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("application/json")
-        assert response.headers["content-disposition"] == f'attachment; filename="vigilantai-ioc-report-{report_id}.json"'
+        assert response.headers["content-disposition"] == f'attachment; filename="socluma-ioc-report-{report_id}.json"'
 
         current["id"] = viewer_id
         assert client.get(f"/api/v1/ioc-commercial/reports/{report_id}/download").status_code == 403

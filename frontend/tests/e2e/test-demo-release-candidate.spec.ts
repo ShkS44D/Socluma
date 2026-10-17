@@ -32,7 +32,7 @@ test('report download sends bearer authentication and honors a safe server filen
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Open' }).first().click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^vigilantai-ioc-report-[0-9a-f-]+\.json$/)
+  expect(download.suggestedFilename()).toMatch(/^socluma-ioc-report-[0-9a-f-]+\.json$/)
   expect(authorization).toMatch(/^Bearer /)
-  await expect(page.getByText(/Report downloaded as vigilantai-ioc-report-[0-9a-f-]+\.json/)).toBeVisible()
+  await expect(page.getByText(/Report downloaded as socluma-ioc-report-[0-9a-f-]+\.json/)).toBeVisible()
 })

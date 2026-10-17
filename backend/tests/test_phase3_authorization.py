@@ -42,7 +42,7 @@ from src.services.organization_service import organization_service
 from src.utils.datetime_utils import get_utc_now
 
 
-PASSWORD = "VigilantAI-Test-Passphrase-2026!"
+PASSWORD = "Socluma-Test-Passphrase-2026!"
 
 
 @pytest.fixture()

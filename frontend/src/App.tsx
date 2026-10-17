@@ -94,7 +94,7 @@ function App() {
       setThemePreference(customEvent.detail || getStoredThemePreference())
     }
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'vigilantai-theme-preference') {
+      if (event.key === 'socluma-theme-preference') {
         setThemePreference(getStoredThemePreference())
       }
     }

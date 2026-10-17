@@ -178,7 +178,7 @@ test.describe('Incident intelligence release-candidate variants', () => {
 
   test('script-like entity values are rendered as text and never executed', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
-    const hostile = '<img src=x onerror="window.__vigilantaiInjected=true">'
+    const hostile = '<img src=x onerror="window.__soclumaInjected=true">'
     await login(page)
     await installIncidentRoutes(page, {
       explanation: incidentExplanation({
@@ -187,11 +187,11 @@ test.describe('Incident intelligence release-candidate variants', () => {
     })
     await openFixture(page)
     await expect(page.getByText(`process: ${hostile}`)).toBeVisible()
-    expect(await page.evaluate(() => Boolean((window as typeof window & { __vigilantaiInjected?: boolean }).__vigilantaiInjected))).toBe(false)
+    expect(await page.evaluate(() => Boolean((window as typeof window & { __soclumaInjected?: boolean }).__soclumaInjected))).toBe(false)
     assertNoFailures()
   })
 
-  test('VigilantAI Copilot double submit sends one provider request', async ({ page }) => {
+  test('Socluma Copilot double submit sends one provider request', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     let chatRequests = 0
     await login(page)
@@ -209,13 +209,13 @@ test.describe('Incident intelligence release-candidate variants', () => {
     })
     await page.goto(`/ai/incident-copilot?incidentId=${INCIDENT_ID}`)
     await page.getByLabel('Question').fill('Which alert created it?')
-    await page.getByRole('button', { name: 'Ask VigilantAI Copilot' }).dblclick()
+    await page.getByRole('button', { name: 'Ask Socluma Copilot' }).dblclick()
     await expect(page.getByText('One grounded response.')).toBeVisible()
     expect(chatRequests).toBe(1)
     assertNoFailures()
   })
 
-  test('VigilantAI Copilot labels OpenAI and historical Gemini provider metadata safely', async ({ page }) => {
+  test('Socluma Copilot labels OpenAI and historical Gemini provider metadata safely', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     await login(page)
     await page.route(`**/api/v1/ai/incident/${INCIDENT_ID}/conversations**`, async (route) => {
@@ -246,15 +246,15 @@ test.describe('Incident intelligence release-candidate variants', () => {
       provider = 'gemini'
     })
     await page.goto(`/ai/incident-copilot?incidentId=${INCIDENT_ID}`)
-    await page.getByRole('button', { name: 'Ask VigilantAI Copilot' }).click()
+    await page.getByRole('button', { name: 'Ask Socluma Copilot' }).click()
     await expect(page.getByText('OpenAI / gpt-5.6-luna')).toBeVisible()
     await expect(page.getByText('30 tokens (20 in / 10 out)')).toBeVisible()
-    await page.getByRole('button', { name: 'Ask VigilantAI Copilot' }).click()
+    await page.getByRole('button', { name: 'Ask Socluma Copilot' }).click()
     await expect(page.getByText('Gemini (historical) / gemini-historical-snapshot')).toBeVisible()
     assertNoFailures()
   })
 
-  test('VigilantAI Copilot conversation history survives a page reload', async ({ page }) => {
+  test('Socluma Copilot conversation history survives a page reload', async ({ page }) => {
     const assertNoFailures = monitorRuntime(page)
     const conversationId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     const messages = [

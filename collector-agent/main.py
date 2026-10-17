@@ -1,7 +1,7 @@
 import sys
 from config import Config
-from api_client import VigilantAIAPIClient
-from collector import VigilantAICollector
+from api_client import SoclumaAPIClient
+from collector import SoclumaCollector
 from utils.logger import setup_logger
 
 logger = setup_logger("main")
@@ -15,10 +15,10 @@ def main():
     logger.info("Configuration loaded successfully")
     
     # Initialize API client
-    api_client = VigilantAIAPIClient(Config)
+    api_client = SoclumaAPIClient(Config)
     
     # Initialize and start collector
-    collector = VigilantAICollector(api_client, Config.HEARTBEAT_INTERVAL_SECONDS, Config.EVENT_POLL_INTERVAL_SECONDS)
+    collector = SoclumaCollector(api_client, Config.HEARTBEAT_INTERVAL_SECONDS, Config.EVENT_POLL_INTERVAL_SECONDS)
     
     try:
         collector.start()

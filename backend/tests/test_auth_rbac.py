@@ -64,7 +64,7 @@ class AuthAndRbacTests(unittest.TestCase):
         user = User(
             tenant_id=tenant.id,
             email=f"{role.value}@example.com",
-            hashed_password=get_password_hash("VigilantAI-Test-Passphrase-2026!"),
+            hashed_password=get_password_hash("Socluma-Test-Passphrase-2026!"),
             full_name=f"{role.value.title()} User",
             role=role,
         )
@@ -127,7 +127,7 @@ class AuthAndRbacTests(unittest.TestCase):
             "/api/v1/auth/register",
             json={
                 "email": "admin@example.com",
-                "password": "VigilantAI-Test-Passphrase-2026!",
+                "password": "Socluma-Test-Passphrase-2026!",
                 "full_name": "Admin User",
                 "tenant_name": "Test Tenant",
                 "tenant_slug": "test-tenant",
@@ -137,7 +137,7 @@ class AuthAndRbacTests(unittest.TestCase):
 
         login_response = self.client.post(
             "/api/v1/auth/login",
-            json={"email": "admin@example.com", "password": "VigilantAI-Test-Passphrase-2026!"},
+            json={"email": "admin@example.com", "password": "Socluma-Test-Passphrase-2026!"},
         )
         self.assertEqual(login_response.status_code, 200)
         token = login_response.json()["access_token"]

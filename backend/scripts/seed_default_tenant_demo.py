@@ -1,4 +1,4 @@
-"""Add the controlled VigilantAI demonstration story to an existing Default Tenant."""
+"""Add the controlled Socluma demonstration story to an existing Default Tenant."""
 
 from __future__ import annotations
 

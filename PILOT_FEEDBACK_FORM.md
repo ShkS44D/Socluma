@@ -1,4 +1,4 @@
-# VigilantAI Analyst Pilot Feedback
+# Socluma Analyst Pilot Feedback
 
 Pilot scenario: __________  Analyst (optional): __________  Date: __________
 
@@ -11,8 +11,8 @@ Rate each item from 1 (poor/difficult/low trust) to 5 (excellent/easy/high trust
 | Risk-score explanation | | |
 | Evidence usefulness | | |
 | Timeline usefulness | | |
-| VigilantAI Copilot accuracy | | |
-| VigilantAI Copilot uncertainty handling | | |
+| Socluma Copilot accuracy | | |
+| Socluma Copilot uncertainty handling | | |
 | Navigation ease (1 = difficult, 5 = easy) | | |
 | Investigation time efficiency | | |
 | Overall trust | | |

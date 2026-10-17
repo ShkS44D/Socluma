@@ -1,8 +1,8 @@
 
-# VigilantAI Frontend Startup Script
+# Socluma Frontend Startup Script
 # Ensures frontend always starts on port 3000
 
-Write-Host "=== VigilantAI Frontend Startup ===" -ForegroundColor Cyan
+Write-Host "=== Socluma Frontend Startup ===" -ForegroundColor Cyan
 
 $PORT = 3000
 

@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 from functools import lru_cache
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    PROJECT_NAME: str = "VigilantAI"
+    PROJECT_NAME: str = "Socluma"
     APP_VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
@@ -29,9 +30,9 @@ class Settings(BaseSettings):
     
     # Database
     POSTGRES_SERVER: str = "db"
-    POSTGRES_USER: str = "vigilantai"
-    POSTGRES_PASSWORD: str = "vigilantai_secret"
-    POSTGRES_DB: str = "vigilantai"
+    POSTGRES_USER: str = "socluma"
+    POSTGRES_PASSWORD: str = "socluma_secret"
+    POSTGRES_DB: str = "socluma"
     USE_SQLITE: bool = True
     DATABASE_URL_OVERRIDE: Optional[str] = None
     
@@ -40,7 +41,10 @@ class Settings(BaseSettings):
         if self.DATABASE_URL_OVERRIDE:
             return self.DATABASE_URL_OVERRIDE
         if self.USE_SQLITE:
-            return "sqlite:///./vigilantai.db"
+            # Keep existing local installations on their original database.
+            if not Path("socluma.db").exists() and Path("vigilantai.db").exists():
+                return "sqlite:///./vigilantai.db"
+            return "sqlite:///./socluma.db"
         return f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:5432/{self.POSTGRES_DB}"
     
     # Redis
@@ -59,6 +63,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 14
+    # Token issuer is a stable protocol identifier, not display branding.
     JWT_ISSUER: str = "vigilantai"
     COLLECTOR_TOKEN_SECRET: Optional[str] = None
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
@@ -66,7 +71,7 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 12
     PASSWORD_MAX_LENGTH: int = 128
     PASSWORD_BCRYPT_ROUNDS: int = 12
-    MFA_ISSUER: str = "VigilantAI"
+    MFA_ISSUER: str = "Socluma"
     MFA_CHALLENGE_MINUTES: int = 5
     MFA_ENROLLMENT_MINUTES: int = 10
     MFA_FAILURE_LIMIT: int = 5
@@ -84,7 +89,7 @@ class Settings(BaseSettings):
     SECURE_COOKIE: bool = False
     COOKIE_SAMESITE: str = "lax"
     FRONTEND_PUBLIC_URL: str = "http://localhost:3000"
-    AUTH_EMAIL_FROM: str = "security@vigilantai.local"
+    AUTH_EMAIL_FROM: str = "security@socluma.local"
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USERNAME: Optional[str] = None
@@ -348,8 +353,8 @@ class Settings(BaseSettings):
             raise RuntimeError("Password length configuration is invalid")
         if self.PASSWORD_BCRYPT_ROUNDS < 10 or self.PASSWORD_BCRYPT_ROUNDS > 15:
             raise RuntimeError("PASSWORD_BCRYPT_ROUNDS must be between 10 and 15")
-        if self.MFA_ISSUER != "VigilantAI":
-            raise RuntimeError("MFA_ISSUER must be VigilantAI")
+        if self.MFA_ISSUER not in {"Socluma", "VigilantAI"}:
+            raise RuntimeError("MFA_ISSUER must be Socluma (or the legacy issuer for existing installations)")
         if self.MFA_CHALLENGE_MINUTES < 1 or self.MFA_CHALLENGE_MINUTES > 10:
             raise RuntimeError("MFA_CHALLENGE_MINUTES must be between 1 and 10")
         if self.MFA_FAILURE_LIMIT < 3 or self.MFA_LOCKOUT_MINUTES < 1:
@@ -501,7 +506,7 @@ class Settings(BaseSettings):
             None,
             "",
             "your-secret-key-here-change-in-production",
-            "vigilantai_dev_secret_change_me",
+            "socluma_dev_secret_change_me",
             "collector-secret-key-here-change-in-production",
         }
         required = {
@@ -542,7 +547,7 @@ class Settings(BaseSettings):
             raise RuntimeError("Production startup blocked: USE_REDIS_MOCK must be false")
         if self.SYSLOG_UDP_ENABLED:
             raise RuntimeError("Production startup blocked: public UDP Syslog is not enabled by default")
-        placeholder_values = {"change-me", "changeme", "password", "secret", "vigilantai_secret"}
+        placeholder_values = {"change-me", "changeme", "password", "secret", "socluma_secret"}
         database_password = (
             urlparse(self.DATABASE_URL_OVERRIDE).password
             if self.DATABASE_URL_OVERRIDE
