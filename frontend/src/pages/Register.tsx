@@ -13,6 +13,7 @@ import {
 import { register, login } from '../services/api'
 import { useAuthStore } from '../store'
 import CyberBackground from '../components/auth/CyberBackground'
+import BrandLogo from '../components/BrandLogo'
 
 const Register: React.FC = () => {
     const [email, setEmail] = useState('')
@@ -69,8 +70,9 @@ const Register: React.FC = () => {
                     alignItems: 'center',
                 }}
             >
+                <Box sx={{ mb: 3 }}><BrandLogo size={52} showTagline /></Box>
                 <Typography component="h1" variant="h5">
-                    Socluma Register
+                    Create your account
                 </Typography>
                 <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
                     {error && (

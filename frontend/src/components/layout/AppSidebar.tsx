@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { useLocation, useNavigate } from 'react-router-dom'
+import BrandLogo from '../BrandLogo'
 
 export interface NavigationItem {
   text: string
@@ -34,12 +35,7 @@ const SidebarContent: React.FC<{ items: NavigationItem[] }> = ({ items }) => {
   return (
     <Box sx={{ height: '100%', px: 1.5 }}>
       <Toolbar sx={{ px: 1 }}>
-        <Box>
-          <Typography variant="h6">Socluma</Typography>
-          <Typography variant="caption" color="text.secondary">
-            AI-Assisted Security Operations
-          </Typography>
-        </Box>
+        <BrandLogo showTagline />
       </Toolbar>
       <List sx={{ mt: 1 }}>
         {items.map((item) => {

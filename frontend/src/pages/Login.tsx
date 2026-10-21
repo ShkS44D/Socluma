@@ -13,6 +13,7 @@ import {
 import { completeMfaLogin, login } from '../services/api'
 import { useAuthStore } from '../store'
 import CyberBackground from '../components/auth/CyberBackground'
+import BrandLogo from '../components/BrandLogo'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -66,8 +67,9 @@ const Login: React.FC = () => {
           alignItems: 'center',
         }}
       >
+        <Box sx={{ mb: 3 }}><BrandLogo size={52} showTagline /></Box>
         <Typography component="h1" variant="h5">
-          Socluma Login
+          Sign in
         </Typography>
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
           {error && (
