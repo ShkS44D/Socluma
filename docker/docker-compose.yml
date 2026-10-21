@@ -8,6 +8,7 @@ services:
       - "${BACKEND_PORT:-8001}:8000"
     volumes:
       - ../backend:/app
+      - application_data:/var/lib/socluma
     env_file:
       - ../backend/.env
     environment:
@@ -20,6 +21,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - USE_REDIS_MOCK=false
+      - AUDIT_ARCHIVE_DIRECTORY=/var/lib/socluma/audit-archives
+      - AUDIT_EXPORT_DIRECTORY=/var/lib/socluma/audit-exports
+      - IOC_COMMERCIAL_ARTIFACT_DIRECTORY=/var/lib/socluma/ioc-artifacts
       - SECRET_KEY=${SECRET_KEY:-socluma_dev_secret_change_me}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-socluma_dev_jwt_secret_change_me}
       - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-socluma_dev_refresh_secret_change_me}
@@ -53,9 +57,10 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO --uid=nobody --gid=nogroup
+    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
     volumes:
       - ../backend:/app
+      - application_data:/var/lib/socluma
     env_file:
       - ../backend/.env
     environment:
@@ -68,6 +73,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - USE_REDIS_MOCK=false
+      - AUDIT_ARCHIVE_DIRECTORY=/var/lib/socluma/audit-archives
+      - AUDIT_EXPORT_DIRECTORY=/var/lib/socluma/audit-exports
+      - IOC_COMMERCIAL_ARTIFACT_DIRECTORY=/var/lib/socluma/ioc-artifacts
       - SECRET_KEY=${SECRET_KEY:-socluma_dev_secret_change_me}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-socluma_dev_jwt_secret_change_me}
       - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-socluma_dev_refresh_secret_change_me}
@@ -88,6 +96,11 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  scheduler:
+    extends:
+      service: worker
+    command: celery -A src.workers.celery_app.celery_app beat --loglevel=INFO --schedule=/var/lib/socluma/celerybeat-schedule
 
   # Frontend
   frontend:
@@ -157,5 +170,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  application_data:
   postgres_data:
   redis_data:

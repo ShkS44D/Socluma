@@ -228,6 +228,20 @@ class SOARFrameworkTests(unittest.TestCase):
         )
         self.assertEqual(credential.status_code, 403)
 
+    def test_request_cannot_disable_connector_approval(self):
+        connector = self._create_connector(requires_approval=True)
+        response = self.client.post(
+            "/api/v1/soar/executions",
+            json={"connector_id": connector["id"], "action_name": "notify",
+                  "requires_approval": False, "approval_roles": ["viewer"]},
+        )
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["status"], "awaiting_approval")
+        self.assertEqual(response.json()["attempts"], 0)
+        approvals = self.client.get("/api/v1/soar/approvals").json()
+        self.assertEqual(len(approvals), 1)
+        self.assertEqual(approvals[0]["required_role"], "admin")
+
     def test_audit_events_are_recorded(self):
         connector = self._create_connector()
         self.client.post(

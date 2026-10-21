@@ -1,9 +1,13 @@
 from __future__ import annotations
 from sqlalchemy.orm import Session
 
-from src.models.sqlalchemy import ResponseAction, IncidentStatus
+from src.models.sqlalchemy import ResponseAction
 from src.models.pydantic import ResponseActionCreate
 from src.services.incident_service import incident_service
+
+
+class UnsupportedResponseAction(ValueError):
+    pass
 
 
 class ResponseActionService:
@@ -28,29 +32,10 @@ class ResponseActionService:
         action_data: ResponseActionCreate,
     ) -> ResponseAction:
         incident_service.get_incident_model(db, tenant_id, incident_id)
-        action = ResponseAction(
-            tenant_id=tenant_id,
-            incident_id=incident_id,
-            action_type=action_data.action_type,
-            executed_by=user_id,
-            details=action_data.details,
+        raise UnsupportedResponseAction(
+            "This endpoint has no action executor. Use a configured SOAR connector "
+            "to execute response actions with approval and execution tracking."
         )
-        db.add(action)
-        db.commit()
-        db.refresh(action)
-
-        # Simulation of action execution
-        from src.models.sqlalchemy import ActionStatus
-        action.status = ActionStatus.RUNNING
-        db.add(action)
-        db.commit()
-
-        action.status = ActionStatus.COMPLETED
-        db.add(action)
-        db.commit()
-        db.refresh(action)
-
-        return action
 
 
 response_action_service = ResponseActionService()

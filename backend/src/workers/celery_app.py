@@ -16,6 +16,7 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    broker_connection_retry_on_startup=True,
     task_always_eager=settings.SOAR_TASK_ALWAYS_EAGER or settings.USE_REDIS_MOCK,
     task_time_limit=settings.CELERY_TASK_TIME_LIMIT_SECONDS,
     task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS,

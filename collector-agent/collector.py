@@ -26,8 +26,7 @@ class SoclumaCollector:
         elif system == "linux":
             self.event_collector = LinuxEventCollector()
         else:
-            logger.warning(f"Unsupported platform: {system}, using simulator")
-            self.event_collector = WindowsEventCollector()  # Use Windows simulator for any platform
+            raise RuntimeError(f"Unsupported collector platform: {system}. Windows or Linux is required.")
     
     def start(self):
         logger.info(

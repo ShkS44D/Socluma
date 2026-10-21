@@ -684,7 +684,17 @@ def create_report(
     except IOCCommercialError as exc:
         _raise(exc)
     from src.workers.tasks import process_ioc_report
-    process_ioc_report.delay(row.id, user.tenant_id)
+    try:
+        process_ioc_report.delay(row.id, user.tenant_id)
+    except Exception as exc:
+        db.rollback()
+        row.status = "failed"
+        row.error_code = "IOC_REPORT_QUEUE_UNAVAILABLE"
+        db.commit()
+        raise HTTPException(503, detail={
+            "error_code": "IOC_REPORT_QUEUE_UNAVAILABLE",
+            "message": "Report processing is temporarily unavailable.",
+        }) from exc
     audit_service.record(db, action="ioc_report_requested", user=user, resource_type="ioc_report_job", resource_id=row.id, ip_address=_ip(request), details={"report_type": row.report_type, "format": row.format})
     return {"id": row.id, "status": row.status, "expires_at": row.expires_at}
 
@@ -704,7 +714,13 @@ def download_report(
     from src.utils.datetime_utils import ensure_utc, get_utc_now
     if ensure_utc(row.expires_at) <= get_utc_now():
         raise HTTPException(410, detail={"error_code": "IOC_REPORT_EXPIRED", "message": "Report has expired"})
-    encrypted = LocalAuditArtifactStorage(get_settings().IOC_COMMERCIAL_ARTIFACT_DIRECTORY).read(row.artifact_key)
+    try:
+        encrypted = LocalAuditArtifactStorage(get_settings().IOC_COMMERCIAL_ARTIFACT_DIRECTORY).read(row.artifact_key)
+    except OSError as exc:
+        raise HTTPException(503, detail={
+            "error_code": "IOC_REPORT_ARTIFACT_UNAVAILABLE",
+            "message": "The report artifact is unavailable. Request a new report or contact the administrator.",
+        }) from exc
     payload = decrypt_bytes(encrypted)
     audit_service.record(db, action="ioc_report_downloaded", user=user, resource_type="ioc_report_job", resource_id=row.id, ip_address=_ip(request), details={"checksum": row.checksum})
     media = {"csv": "text/csv", "json": "application/json", "jsonl": "application/x-ndjson", "markdown": "text/markdown", "html": "text/html"}.get(row.format, "application/octet-stream")

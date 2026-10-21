@@ -399,7 +399,8 @@ class SOARActionService:
         return decrypt_json_secret(credential.encrypted_secret)
 
     def _requires_approval(self, connector: ActionConnector, data: ConnectorExecutionCreate) -> bool:
-        return bool(data.requires_approval if data.requires_approval is not None else connector.requires_approval)
+        # A request may require additional approval, but cannot relax connector policy.
+        return bool(connector.requires_approval or data.requires_approval)
 
     def _create_approvals(
         self,
@@ -409,7 +410,10 @@ class SOARActionService:
         data: ConnectorExecutionCreate,
         user_id: Optional[str],
     ) -> None:
-        roles = data.approval_roles or list(connector.approval_roles or []) or [None]
+        roles = (
+            list(connector.approval_roles or [])
+            if connector.requires_approval else data.approval_roles
+        ) or [None]
         timeout_minutes = int((data.retry_policy or {}).get("approval_timeout_minutes", 60))
         expires_at = self._utcnow() + timedelta(minutes=timeout_minutes)
         for role in roles:

@@ -34,7 +34,7 @@ from src.models.pydantic import (
 from src.models.sqlalchemy import IncidentPriority, IncidentStatus, Severity, User
 from src.services.incident_service import incident_service
 from src.services.incident_comment_service import incident_comment_service
-from src.services.response_action_service import response_action_service
+from src.services.response_action_service import response_action_service, UnsupportedResponseAction
 from src.services.audit_service import audit_service
 from src.services.ioc_service import ioc_service
 from src.services.incident_intelligence_service import incident_intelligence_service
@@ -562,7 +562,8 @@ def list_comments(
         _handle_incident_error(exc)
 
 
-@router.post("/{incident_id}/actions", response_model=ResponseAction, status_code=status.HTTP_201_CREATED)
+@router.post("/{incident_id}/actions", response_model=ResponseAction, status_code=status.HTTP_201_CREATED,
+             deprecated=True)
 def create_response_action(
     incident_id: str,
     action_data: ResponseActionCreate,
@@ -584,6 +585,10 @@ def create_response_action(
             details={"action_type": action.action_type},
         )
         return ResponseAction.model_validate(action)
+    except UnsupportedResponseAction as exc:
+        raise HTTPException(status_code=501, detail={
+            "error_code": "RESPONSE_ACTION_EXECUTOR_UNAVAILABLE", "message": str(exc),
+        }) from exc
     except ValueError as exc:
         _handle_incident_error(exc)
 

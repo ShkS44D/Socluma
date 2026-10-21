@@ -23,8 +23,10 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system socluma \
-    && useradd --system --gid socluma --home-dir /app socluma
+    && groupadd --gid 10001 socluma \
+    && useradd --uid 10001 --gid socluma --home-dir /app socluma \
+    && mkdir -p /var/lib/socluma/ioc-artifacts /var/lib/socluma/audit-exports /var/lib/socluma/audit-archives \
+    && chown -R socluma:socluma /var/lib/socluma /app
 
 COPY --from=builder /wheels /wheels
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels

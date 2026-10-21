@@ -1,6 +1,5 @@
 import platform
 import re
-import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from utils.logger import setup_logger
@@ -27,15 +26,15 @@ class LinuxEventCollector:
                 self.log_file_path = self.SYSLOG_PATH
                 logger.info(f"Using syslog: {self.SYSLOG_PATH}")
             else:
-                logger.warning("No log files found, will simulate events")
+                logger.warning("No supported log files found; event collection is unavailable")
                 self.log_file_path = None
         else:
-            logger.warning("Not on Linux, will simulate events")
+            logger.warning("Not on Linux; Linux event collection is unavailable")
             self.log_file_path = None
     
     def collect_events(self) -> List[Dict[str, Any]]:
         if not self.is_linux or not self.log_file_path:
-            return self._simulate_events()
+            return []
         
         events = []
         try:
@@ -111,33 +110,3 @@ class LinuxEventCollector:
             logger.debug(f"Failed to parse auth log line: {e}")
         
         return None
-
-    def _simulate_events(self) -> List[Dict[str, Any]]:
-        if not hasattr(self, '_last_sim_time'):
-            self._last_sim_time = time.time() - 30  # 30s back
-        
-        events = []
-        now = time.time()
-        now_dt = datetime.now(timezone.utc)
-        
-        if now - self._last_sim_time > 15:  # Simulate every 15s
-            self._last_sim_time = now
-            events.append({
-                "source": "linux-agent",
-                "event_type": BackendEventType.LOGIN,
-                "raw_event": {
-                    "timestamp": int(now),
-                    "user": "admin",
-                    "source_ip": "192.168.1.100",
-                    "status": "success"
-                },
-                "normalized_event": {
-                    "user": "admin",
-                    "source_ip": "192.168.1.100",
-                    "status": "success"
-                },
-                "severity": BackendSeverity.MEDIUM,
-                "timestamp": now_dt
-            })
-        
-        return events

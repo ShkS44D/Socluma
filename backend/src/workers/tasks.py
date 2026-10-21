@@ -104,6 +104,16 @@ def process_ioc_report(self, job_id: str, tenant_id: str) -> dict:
             details={"format": job.format, "checksum": job.checksum, "manifest": job.manifest},
         )
         return {"id": job.id, "status": job.status}
+    except Exception:
+        db.rollback()
+        job = db.query(IOCReportJob).filter_by(id=job_id, tenant_id=tenant_id).first()
+        if job is not None:
+            job.status = "failed"
+            job.error_code = "IOC_REPORT_GENERATION_FAILED"
+            job.completed_at = get_utc_now()
+            db.commit()
+        logger.exception("IOC report generation failed", extra={"job_id": job_id, "tenant_id": tenant_id})
+        raise
     finally:
         db.close()
 

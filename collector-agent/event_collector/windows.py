@@ -1,6 +1,5 @@
 import platform
 import subprocess
-import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
@@ -21,6 +20,8 @@ class WindowsEventCollector:
         self._unavailable_channels: set[str] = set()
         self._security_log_warning_emitted = False
         self.is_windows = platform.system().lower() == "windows"
+        self.win32evtlog = None
+        self.win32con = None
         if self.is_windows:
             try:
                 import win32evtlog
@@ -30,13 +31,13 @@ class WindowsEventCollector:
                 logger.info("Windows Event Log API loaded successfully")
                 self._warn_if_pnp_auditing_disabled()
             except ImportError:
-                logger.warning("pywin32 not installed, Windows event collection will be simulated")
+                logger.warning("pywin32 not installed; Windows event collection is unavailable")
                 self.win32evtlog = None
                 self.win32con = None
 
     def collect_events(self) -> List[Dict[str, Any]]:
         if not self.is_windows or not self.win32evtlog:
-            return self._simulate_events()
+            return []
         if hasattr(self.win32evtlog, "EvtQuery") and hasattr(self.win32evtlog, "EvtRender"):
             return self._collect_xml_events()
         return self._collect_legacy_security_events()
@@ -180,12 +181,11 @@ class WindowsEventCollector:
                 logger.warning(
                     "Windows Security event log is unavailable (%s). "
                     "Run the collector with Event Log Reader permissions to collect real Security events; "
-                    "using simulated telemetry meanwhile.",
+                    "No telemetry will be generated for this failed poll.",
                     e,
                 )
                 self._security_log_warning_emitted = True
-            # Fall back to simulation when privileges are insufficient
-            return self._simulate_events()
+            return []
         finally:
             if hand is not None:
                 try:
@@ -193,7 +193,7 @@ class WindowsEventCollector:
                 except Exception:
                     logger.debug("Failed to close Windows event log handle", exc_info=True)
         
-        return events if events else self._simulate_events()
+        return events
 
     def _parse_event_xml(self, xml: str) -> Optional[Dict[str, Any]]:
         try:
@@ -502,31 +502,3 @@ class WindowsEventCollector:
         if value.tzinfo is None:
             return value.astimezone(timezone.utc)
         return value.astimezone(timezone.utc)
-
-    def _simulate_events(self) -> List[Dict[str, Any]]:
-        if not hasattr(self, '_last_sim_time'):
-            self._last_sim_time = time.time() - 30  # 30s back
-        
-        events = []
-        now = time.time()
-        now_dt = datetime.now(timezone.utc)
-        
-        if now - self._last_sim_time > 10:  # Simulate every 10s
-            self._last_sim_time = now
-            events.append({
-                "source": "windows-agent",
-                "event_type": BackendEventType.PROCESS,
-                "raw_event": {
-                    "timestamp": int(now),
-                    "process": "powershell.exe",
-                    "command_line": "powershell -NoProfile -Command Get-ChildItem"
-                },
-                "normalized_event": {
-                    "process": "powershell.exe",
-                    "command": "powershell -NoProfile -Command Get-ChildItem"
-                },
-                "severity": BackendSeverity.HIGH,
-                "timestamp": now_dt
-            })
-        
-        return events

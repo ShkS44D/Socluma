@@ -11,7 +11,7 @@ The Socluma collector agent sends host telemetry and heartbeat updates to the So
   and Play device fields such as `DeviceId`, `DeviceDescription`, and
   `ClassName`.
 - Linux: auth/syslog collection where readable.
-- Other platforms: simulated development events.
+- Other platforms are unsupported. Missing log access, unavailable APIs, and empty polls never generate synthetic events.
 
 ## Install
 

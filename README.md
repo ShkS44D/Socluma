@@ -33,7 +33,7 @@ AI features are evidence-scoped and audited. When `OPENAI_API_KEY` is not config
 | `docker` | Docker Compose, Nginx | Development and production-style service orchestration |
 | `docs` | Markdown | Operational, security, architecture, and feature documentation |
 
-The complete Docker stack consists of the frontend, backend API, Celery worker, PostgreSQL, Redis, and optional pgAdmin. The production-style stack adds Nginx as the public reverse proxy.
+The complete Docker stack consists of the frontend, backend API, Celery worker, scheduler, PostgreSQL, Redis, and optional pgAdmin. The production-style stack adds Nginx as the public reverse proxy.
 
 ## Requirements
 
@@ -157,6 +157,12 @@ celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
 
 Set `USE_REDIS_MOCK=false` and configure `REDIS_HOST` and `REDIS_PORT` first.
 
+For periodic searches, threat-intelligence synchronization, and artifact retention, also run exactly one scheduler using the same environment:
+
+```powershell
+celery -A src.workers.celery_app.celery_app beat --loglevel=INFO
+```
+
 ## Collector agent
 
 Create a collector in Socluma and securely retain the returned collector ID and one-time token. Then run:
@@ -264,7 +270,9 @@ Do not use production accounts or production data for automated tests.
 
 ## Production-style Docker deployment
 
-The production Compose configuration uses PostgreSQL, Redis, a backend worker, non-root application containers, health checks, a statically built frontend, and Nginx.
+The production Compose configuration uses PostgreSQL, Redis, a background worker, a single scheduler, non-root application containers, health checks, a statically built frontend, and Nginx. API and worker artifacts are persisted in the shared `application_data` volume, mounted at `/var/lib/socluma`. Include this volume in backups alongside PostgreSQL and retain the encryption/signing secrets needed to read its contents. Do not scale the scheduler beyond one instance.
+
+When moving an existing installation to shared storage, stop the API, worker, and scheduler first. Back up artifact directories from every API/worker container and any local `backend/data` directory before replacing containers. Restore `ioc-artifacts`, `audit-exports`, and `audit-archives` into the corresponding shared-volume directories with ownership `10001:10001`, retaining the original encryption/signing secrets. Keep the backups until existing downloads have been verified.
 
 Set strong, unique values in the deployment environment:
 
@@ -278,12 +286,17 @@ $env:REFRESH_TOKEN_SECRET="<strong-random-secret>"
 $env:COLLECTOR_TOKEN_SECRET="<strong-random-secret>"
 $env:ALLOWED_HOSTS='["soc.example.com"]'
 $env:BACKEND_CORS_ORIGINS='["https://soc.example.com"]'
+$env:FRONTEND_PUBLIC_URL="https://soc.example.com"
+$env:ADMIN_EMAIL="<administrator-email>"
+$env:ADMIN_PASSWORD="<strong-administrator-passphrase>"
 $env:OPENAI_API_KEY="<provider-key>"
 $env:PUBLIC_PORT="8080"
 docker compose -f docker\docker-compose.prod.yml up --build -d
 ```
 
-Open `http://localhost:8080` for a local production-style check. For an internet-facing deployment, terminate TLS, restrict network exposure, use a managed secrets solution, configure backups, and monitor `/health/ready` and `/metrics`.
+Terminate HTTPS at a trusted reverse proxy or load balancer in front of port 8080 and open the configured `FRONTEND_PUBLIC_URL`. Production uses secure authentication cookies and explicit HTTPS origins; plain HTTP is not a supported production login setup. Restrict network exposure, use a managed secrets solution, configure SMTP for account emails, configure backups, and monitor `/health/ready` and `/metrics`. API documentation and development email/token capture are disabled in production.
+
+Real response execution requires a configured SOAR connector. The deprecated incident-action creation endpoint returns `501` instead of claiming that an unsupported action completed. Collector agents forward real host events only; missing permissions or empty polls do not produce simulated telemetry.
 
 ## Health and observability
 

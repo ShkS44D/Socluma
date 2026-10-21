@@ -4,8 +4,27 @@ services:
       context: ../backend
       dockerfile: Dockerfile.prod
     command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000"
-    environment:
+    volumes:
+      - application_data:/var/lib/socluma
+    environment: &backend_environment
       - ENVIRONMENT=production
+      - DEBUG=false
+      - DOCS_ENABLED=false
+      - SECURE_COOKIE=true
+      - AUTH_EMAIL_CAPTURE=false
+      - AUTH_DEV_EXPOSE_TOKENS=false
+      - FRONTEND_PUBLIC_URL=${FRONTEND_PUBLIC_URL:?FRONTEND_PUBLIC_URL must be an HTTPS URL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
+      - EMAIL_VERIFICATION_REQUIRED=${EMAIL_VERIFICATION_REQUIRED:-false}
+      - AUDIT_ARCHIVE_DIRECTORY=/var/lib/socluma/audit-archives
+      - AUDIT_EXPORT_DIRECTORY=/var/lib/socluma/audit-exports
+      - IOC_COMMERCIAL_ARTIFACT_DIRECTORY=/var/lib/socluma/ioc-artifacts
       - POSTGRES_SERVER=db
       - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -50,33 +69,9 @@ services:
       context: ../backend
       dockerfile: Dockerfile.prod
     command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
-    environment:
-      - ENVIRONMENT=production
-      - POSTGRES_SERVER=db
-      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER is required}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      - POSTGRES_DB=${POSTGRES_DB:?POSTGRES_DB is required}
-      - USE_SQLITE=false
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - USE_REDIS_MOCK=false
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET is required}
-      - COLLECTOR_TOKEN_SECRET=${COLLECTOR_TOKEN_SECRET:?COLLECTOR_TOKEN_SECRET is required}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:?ALLOWED_HOSTS is required}
-      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:?BACKEND_CORS_ORIGINS is required}
-      - METRICS_ENABLED=${METRICS_ENABLED:-true}
-      - METRICS_PATH=${METRICS_PATH:-/metrics}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.6-luna}
-      - OPENAI_TIMEOUT_SECONDS=${OPENAI_TIMEOUT_SECONDS:-60}
-      - OPENAI_MAX_OUTPUT_TOKENS=${OPENAI_MAX_OUTPUT_TOKENS:-2000}
-      - OPENAI_REASONING_EFFORT=${OPENAI_REASONING_EFFORT:-medium}
-      - CORRELATION_WINDOW_MINUTES=${CORRELATION_WINDOW_MINUTES:-15}
-      - CORRELATION_MIN_SCORE=${CORRELATION_MIN_SCORE:-45}
-      - CORRELATION_MIN_ALERTS=${CORRELATION_MIN_ALERTS:-2}
-      - CORRELATION_ALLOW_REPEATED_ALERTS=${CORRELATION_ALLOW_REPEATED_ALERTS:-false}
+    volumes:
+      - application_data:/var/lib/socluma
+    environment: *backend_environment
     depends_on:
       backend:
         condition: service_healthy
@@ -89,6 +84,13 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+
+  scheduler:
+    extends:
+      service: worker
+    command: celery -A src.workers.celery_app.celery_app beat --loglevel=INFO --schedule=/var/lib/socluma/celerybeat-schedule
+    healthcheck:
+      disable: true
 
   frontend:
     build:
@@ -153,5 +155,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  application_data:
   postgres_data:
   redis_data:

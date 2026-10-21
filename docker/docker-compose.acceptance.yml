@@ -31,6 +31,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${ACCEPTANCE_BACKEND_PORT:?set ACCEPTANCE_BACKEND_PORT}:8000"
+    volumes:
+      - acceptance_application_data:/var/lib/socluma
     environment: &backend_environment
       ENVIRONMENT: development
       USE_SQLITE: "false"
@@ -52,6 +54,9 @@ services:
       OTX_API_KEY: ""
       ABUSEIPDB_API_KEY: ""
       VIRUSTOTAL_API_KEY: ""
+      AUDIT_ARCHIVE_DIRECTORY: /var/lib/socluma/audit-archives
+      AUDIT_EXPORT_DIRECTORY: /var/lib/socluma/audit-exports
+      IOC_COMMERCIAL_ARTIFACT_DIRECTORY: /var/lib/socluma/ioc-artifacts
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -66,10 +71,17 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
-    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO --uid=nobody --gid=nogroup
+    command: celery -A src.workers.celery_app.celery_app worker --loglevel=INFO
+    volumes:
+      - acceptance_application_data:/var/lib/socluma
     environment: *backend_environment
     depends_on:
       backend: { condition: service_healthy }
+
+  scheduler:
+    extends:
+      service: worker
+    command: celery -A src.workers.celery_app.celery_app beat --loglevel=INFO --schedule=/var/lib/socluma/celerybeat-schedule
 
   frontend:
     build:
@@ -83,5 +95,6 @@ services:
       backend: { condition: service_healthy }
 
 volumes:
+  acceptance_application_data:
   acceptance_postgres_data:
   acceptance_redis_data:
